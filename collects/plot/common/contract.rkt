@@ -6,14 +6,10 @@
 (provide (all-defined-out))
 
 ;; ===================================================================================================
-;; Conveniences
+;; Convenience
 
-(defcontract (real>=/c [r real?]) (and/c real? (>=/c r)))
-
-(defcontract (integer>=/c [i integer?]) (and/c integer? (>=/c i)))
-
-(defproc (treeof [contract (or/c contract? (any/c . -> . any/c))]) contract?
-  (or/c contract (listof (recursive-contract (treeof contract)))))
+(defcontract (treeof [ct (or/c contract? (any/c . -> . any/c))])
+  (or/c ct (listof (recursive-contract (treeof ct)))))
 
 ;; ===================================================================================================
 ;; Plot-specific contracts
@@ -22,24 +18,20 @@
                                 'left 'center 'right
                                 'bottom-left 'bottom 'bottom-right))
 
-(defcontract rgb/c (list/c real? real? real?))
-
-(defcontract color/c (or/c rgb/c string? symbol? (is-a?/c color%)))
+(defcontract color/c (or/c (list/c real? real? real?)
+                           string? symbol?
+                           (is-a?/c color%)))
 
 (defcontract plot-color/c (or/c exact-integer? color/c))
 
-(defcontract pen-style/c (one-of/c 'transparent 'solid 'dot 'long-dash
-                                   'short-dash 'dot-dash))
+(defcontract plot-pen-style/c (or/c exact-integer?
+                                    (one-of/c 'transparent 'solid 'dot 'long-dash
+                                              'short-dash 'dot-dash)))
 
-(defcontract plot-pen-style/c (or/c exact-integer? pen-style/c))
-
-(defcontract brush-style/c (one-of/c 'transparent 'solid
-                                     'bdiagonal-hatch 'fdiagonal-hatch 'crossdiag-hatch
-                                     'horizontal-hatch 'vertical-hatch 'cross-hatch))
-
-(defcontract plot-brush-style/c (or/c exact-integer? brush-style/c))
-
-(defcontract plot-font-size/c (real>=/c 0))
+(defcontract plot-brush-style/c (or/c exact-integer?
+                                      (one-of/c 'transparent 'solid
+                                                'bdiagonal-hatch 'fdiagonal-hatch 'crossdiag-hatch
+                                                'horizontal-hatch 'vertical-hatch 'cross-hatch)))
 
 (defcontract font-family/c (one-of/c 'default 'decorative 'roman 'script 'swiss
                                      'modern 'symbol 'system))
@@ -61,14 +53,17 @@
 
 (defcontract point-sym/c (or/c char? string? integer? (apply one-of/c known-point-symbols)))
 
-(defcontract plot-color-function/c ((listof real?) . -> . (listof plot-color/c)))
-(defcontract pen-width-function/c ((listof real?) . -> . (listof (real>=/c 0))))
-(defcontract plot-pen-style-function/c ((listof real?) . -> . (listof plot-pen-style/c)))
-(defcontract plot-brush-style-function/c ((listof real?) . -> . (listof plot-brush-style/c)))
-(defcontract alpha-function/c ((listof real?) . -> . (listof (real-in 0 1))))
+(defcontract plot-colors/c (or/c (listof plot-color/c)
+                                 ((listof real?) . -> . (listof plot-color/c))))
 
-(defcontract plot-colors/c (or/c (listof plot-color/c) plot-color-function/c))
-(defcontract pen-widths/c (or/c (listof (real>=/c 0)) pen-width-function/c))
-(defcontract plot-pen-styles/c (or/c (listof plot-pen-style/c) plot-pen-style-function/c))
-(defcontract plot-brush-styles/c (or/c (listof plot-brush-style/c) plot-brush-style-function/c))
-(defcontract alphas/c (or/c (listof (real-in 0 1)) alpha-function/c))
+(defcontract pen-widths/c (or/c (listof (>=/c 0))
+                                ((listof real?) . -> . (listof (>=/c 0)))))
+
+(defcontract plot-pen-styles/c (or/c (listof plot-pen-style/c)
+                                     ((listof real?) . -> . (listof plot-pen-style/c))))
+
+(defcontract plot-brush-styles/c (or/c (listof plot-brush-style/c)
+                                       ((listof real?) . -> . (listof plot-brush-style/c))))
+
+(defcontract alphas/c (or/c (listof (real-in 0 1))
+                            ((listof real?) . -> . (listof (real-in 0 1)))))

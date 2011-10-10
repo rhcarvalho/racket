@@ -1048,13 +1048,17 @@ If the namespace does not, they are colored the unbound color.
               ;;  and on-paint gets called each time the cursor blinks...)
               (cond
                 [(not eles)
-                 (when tooltip-frame (send tooltip-frame show #f))
+                 (when tooltip-frame 
+                   (when (send tooltip-frame is-shown?)
+                     (send tooltip-frame show #f)))
                  (set! tooltips-in-sync-with-cursor-eles? #t)]
                 [else
                  (define tooltip-infos (filter tooltip-info? eles))
                  (cond
                    [(null? tooltip-infos)
-                    (when tooltip-frame (send tooltip-frame show #f))
+                    (when tooltip-frame 
+                      (when (send tooltip-frame is-shown?)
+                        (send tooltip-frame show #f)))
                     (set! tooltips-in-sync-with-cursor-eles? #t)]
                    [else
                     (unless tooltip-frame (set! tooltip-frame (new tooltip-frame%)))
@@ -1070,9 +1074,12 @@ If the namespace does not, they are colored the unbound color.
                            (send tooltip-frame set-tooltip 
                                  (sort (set->list strings) string<=?))
                            (set! tooltips-in-sync-with-cursor-eles? #t)
-                           (if (and l t r b)
-                               (send tooltip-frame show-over l t (- r l) (- b t))
-                               (send tooltip-frame show #f))]
+                           (cond
+                             [(and l t r b)
+                              (define-values (dx dy) (get-display-left-top-inset))
+                              (send tooltip-frame show-over (- l dx) (- t dy) (- r l) (- b t))]
+                             [else
+                              (send tooltip-frame show #f)])]
                           [else
                            (define-values (tl tt tr tb) (tooltip-info->ltrb (car tooltip-infos)))
                            (unless (and tl tt tr tb)

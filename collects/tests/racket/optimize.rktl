@@ -1643,6 +1643,27 @@
                (regexp-match #rx"1e[+]?100" (exn-message exn))))
 (test (inexact->exact 1e100) (lambda (x) (inexact->exact (fl/ (fl- x 0.0) 1.0))) 1e100)
 
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Check that compiler handles shifting `#%variable-reference'
+
+(test #f
+      'varref-shift
+      (let ()
+        (define (f #:x [x #f]) #f)
+        (define (g #:y [y #f])
+          (begin (f) #f))
+        #f))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Make sure the compiler doesn't end up in an infinite inling loop:
+
+(module unc-small-self-call racket/base
+  (define unc1
+    (let ([x 1])
+      (lambda ()
+        (unc1))))
+  (unc1))
+
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (report-errs)
