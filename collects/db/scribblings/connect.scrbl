@@ -22,15 +22,15 @@ connections}. PostgreSQL and MySQL connections are wire-based, and
 SQLite and ODBC connections are FFI-based.
 
 Wire-based connections communicate using @tech/reference{ports}, which
-do not cause other Racket threads to block. In contrast, all Racket
-threads are blocked during an FFI call, so FFI-based connections can
-seriously degrade the interactivity of a Racket program, particularly
-if long-running queries are performed using the connection. This
-problem can be avoided by creating the FFI-based connection in a
-separate @tech/reference{place} using the @racket[#:use-place]
-keyword argument. Such a connection will not block all Racket threads
-during queries; the disadvantage is the cost of creating and
-communicating with a separate @tech/reference{place}.
+do not cause other Racket threads to block. In contrast, an FFI call
+causes all Racket threads to block until it completes, so FFI-based
+connections can degrade the interactivity of a Racket program,
+particularly if long-running queries are performed using the
+connection. This problem can be avoided by creating the FFI-based
+connection in a separate @tech/reference{place} using the
+@racket[#:use-place] keyword argument. Such a connection will not
+block all Racket threads during queries; the disadvantage is the cost
+of creating and communicating with a separate @tech/reference{place}.
 
 Base connections are made using the following functions.
 
@@ -144,7 +144,7 @@ Base connections are made using the following functions.
 }
 
 @defproc[(mysql-connect [#:user user string?]
-                  [#:database database string?]
+                  [#:database database (or/c string? #f) #f]
                   [#:server server string? "localhost"]
                   [#:port port exact-positive-integer? 3306]
                   [#:socket socket (or/c path-string? #f) #f]
@@ -158,12 +158,16 @@ Base connections are made using the following functions.
                    void])
          connection?]{
 
-  Creates a connection to a MySQL server. The meaning of the keyword
-  arguments is similar to those of the @racket[postgresql-connect]
-  function, except that the first argument to a
-  @racket[notice-handler] function is a MySQL-specific integer code
-  rather than a SQLSTATE string, and a @racket[socket] argument of
-  @racket['guess] is the same as supplying
+  Creates a connection to a MySQL server. If @racket[database] is
+  @racket[#f], the connection is established without setting the
+  current database; it should be subsequently set with the @tt{USE}
+  SQL command.
+
+  The meaning of the other keyword arguments is similar to those of
+  the @racket[postgresql-connect] function, except that the first
+  argument to a @racket[notice-handler] function is a MySQL-specific
+  integer code rather than a SQLSTATE string, and a @racket[socket]
+  argument of @racket['guess] is the same as supplying
   @racket[(mysql-guess-socket-path)].
 
   If the connection cannot be made, an exception is raised.
@@ -334,7 +338,7 @@ Base connections are made using the following functions.
 
 @section{Connection Pooling}
 
-@declare-exporting[db db/base]
+@declare-exporting[db db/base #:use-sources (db/base)]
 
 Creating a database connection can be a costly operation; it may
 involve steps such as process creation and SSL negotiation. A
@@ -411,7 +415,7 @@ a transaction, the transaction is rolled back.
 
 @section{Virtual Connections}
 
-@declare-exporting[db db/base]
+@declare-exporting[db db/base #:use-sources (db/base)]
 
 A @deftech{virtual connection} creates actual connections on demand and
 automatically releases them when they are no longer needed.
@@ -502,7 +506,7 @@ execute parameterized queries expressed as strings or encapsulated via
 
 @section[#:tag "kill-safe"]{Kill-safe Connections}
 
-@declare-exporting[db db/base]
+@declare-exporting[db db/base #:use-sources (db/base)]
 
 @defproc[(kill-safe-connection [c connection?]) 
          connection?]{
@@ -522,7 +526,7 @@ shutting down its ports.
 
 @section{Data Source Names}
 
-@declare-exporting[db db/base]
+@declare-exporting[db db/base #:use-sources (db/base)]
 
 A DSN (data source name) is a symbol associated with a connection
 specification in a DSN file. They are inspired by, but distinct from,
@@ -563,14 +567,14 @@ ODBC's DSNs.
   @racket[data-source], then @racket[dsn-file] is ignored.
 
 @examples/results[
-[(put-dsn 'mydb
+[(put-dsn 'pg
           (postgresql-data-source #:user "me"
                                   #:database "mydb" 
                                   #:password "icecream"))
  (void)]
-[(dsn-connect 'mydb)
+[(dsn-connect 'pg)
  (new connection%)]
-[(dsn-connect 'mydb #:notice-handler (lambda (code msg) ....))
+[(dsn-connect 'pg #:notice-handler (lambda (code msg) ....))
  (new connection%)]
 ]
 }
@@ -623,7 +627,7 @@ ODBC's DSNs.
          data-source?]
 @defproc[(mysql-data-source
            [#:user user string? @#,absent]
-           [#:database database string? @#,absent]
+           [#:database database (or/c string? #f) @#,absent]
            [#:server server string? @#,absent]
            [#:port port exact-positive-integer? @#,absent]
            [#:socket socket (or/c path-string? 'guess #f) @#,absent]
@@ -663,7 +667,7 @@ ODBC's DSNs.
 
 @section[#:tag "managing-connections"]{Mangaging Connections}
 
-@declare-exporting[db db/base]
+@declare-exporting[db db/base #:use-sources (db/base)]
 
 @defproc[(connection? [x any/c])
          boolean?]{

@@ -9,7 +9,9 @@ depend on a boolean value typically treat anything other than
 @racket[#f] as true. The @racket[#t] value is always @racket[eq?] to
 itself, and @racket[#f] is always @racket[eq?] to itself.
 
-See also: @racket[and], @racket[or], @racket[andmap], @racket[ormap].
+@see-read-print["boolean" #:print "booleans"]{booleans}
+
+See also @racket[and], @racket[or], @racket[andmap], and @racket[ormap].
 
 
 @defproc[(boolean? [v any/c]) boolean?]{
@@ -41,8 +43,8 @@ Two values are @racket[equal?] if and only if they are @racket[eqv?],
 unless otherwise specified for a particular datatype.
 
 Datatypes with further specification of @racket[equal?] include
-strings, byte strings, numbers, pairs, mutable pairs, vectors, boxes, hash
-tables, and inspectable structures. In the last five cases, equality
+strings, byte strings, pairs, mutable pairs, vectors, boxes, hash
+tables, and inspectable structures. In the last six cases, equality
 is recursively defined; if both @racket[v1] and @racket[v2] contain
 reference cycles, they are equal when the infinite unfoldings of the
 values would be equal. See also @racket[prop:equal+hash] and @racket[prop:impersonator-of].

@@ -67,6 +67,7 @@
              (void)
              (let ([for-each-eval (lambda (l) (for-each eval l))]) for-each-eval)
              (list ',new-expression '(void)))))))
+    
     (let/ec k
       (contract-eval
        `(,test (void)
@@ -85,16 +86,40 @@
           ',(rewrite expression k)))))
   
   ;; rewrites `provide/contract' to use `contract-out'
-  (define (rewrite-out exp)
-    (let loop ([exp exp])
-      (cond
-        [(null? exp) null]
-        [(list? exp)
-         (case (car exp)
-           [(provide/contract) `(provide (contract-out . ,(cdr exp)))]
-           [else (map loop exp)])]
-        [(pair? exp) (cons (loop (car exp))
-                           (loop (cdr exp)))]
+  (define (rewrite-out orig-exp)
+    (let loop ([exp orig-exp])
+      (match exp
+        [`(module ,modname ,lang ,bodies ...)
+         (define at-beginning '()) 
+         
+         ;; remove (and save) the provide/contract declarations
+         (define removed-bodies
+           (apply 
+            append
+            (for/list ([body (in-list bodies)])
+              (match body
+                [`(provide/contract . ,args)
+                 (set! at-beginning (cons `(provide (contract-out . ,args)) 
+                                          at-beginning))
+                 (list)]
+                [else
+                 (list body)]))))
+         
+         ;; insert the provide/contract (rewrite to contract-out) after the
+         ;; first require that has 'contract' in it
+         (define inserted-bodies
+           (apply
+            append
+            (for/list ([body (in-list removed-bodies)])
+              (match body
+                [`(require ,(? (λ (x) (and (symbol? x) (regexp-match #rx"contract" (symbol->string x)))) mod))
+                 (cons body (reverse at-beginning))]
+                [else
+                 (list body)]))))
+         
+         `(module ,modname ,lang ,@inserted-bodies)]
+        [(? list?)
+         (map loop exp)]
         [else exp])))
 
   ;; rewrites `contract' to use opt/c. If there is a module definition in there, we skip that test.
@@ -1132,6 +1157,30 @@
           (regexp-match #rx"expected keyword argument #:the-missing-keyword-arg-b"
                         (exn-message x)))))
   
+  (test/pos-blame
+   'predicate/c1
+   '(contract predicate/c 1 'pos 'neg))
+  (test/pos-blame
+   'predicate/c2
+   '(contract predicate/c (λ (x y) 1) 'pos 'neg))
+  (test/pos-blame
+   'predicate/c3
+   '((contract predicate/c (λ (x) 1) 'pos 'neg) 12))
+  (test/spec-passed
+   'predicate/c4
+   '((contract predicate/c (λ (x) #t) 'pos 'neg) 12))
+  
+  ;; this test ensures that no contract wrappers
+  ;; are created for struct predicates
+  (test/spec-passed/result
+   'predicate/c5
+   '(let ()
+      (struct x (a))
+      (eq? (contract predicate/c x? 'pos 'neg) x?))
+   #t)
+  
+
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;
   ;; procedure accepts-and-more
@@ -1151,7 +1200,6 @@
   (ctest #t procedure-accepts-and-more? (case-lambda [(x y . z) 1] [(x) 1]) 1)
   (ctest #f procedure-accepts-and-more? (case-lambda [(x y . z) 1] [(x) 1]) 0)
   
-
 ;                         
 ;                         
 ;                         
@@ -6325,6 +6373,20 @@
               object%
               'pos
               'neg))
+
+  (test/spec-passed
+   'class/c-first-order-opaque-class-1
+   '(contract (class/c #:opaque)
+              object%
+              'pos
+              'neg))
+
+  (test/pos-blame
+   'class/c-first-order-opaque-class-2
+   '(contract (class/c #:opaque)
+              (class object% (super-new) (define/public (m x) (add1 x)))
+              'pos
+              'neg))
   
   (test/pos-blame
    'class/c-first-order-method-1
@@ -6355,16 +6417,30 @@
               'neg))
   
   (test/spec-passed
-   'class/c-first-order-method-4
+   'class/c-first-order-method-5
    '(contract (class/c m)
               (class object% (super-new) (define/public (m) 3))
               'pos
               'neg))
   
   (test/pos-blame
-   'class/c-first-order-method-4
+   'class/c-first-order-method-6
    '(contract (class/c [m (-> any/c number? number?)])
               (class object% (super-new) (define/public (m) 3))
+              'pos
+              'neg))
+
+  (test/spec-passed
+   'class/c-first-order-opaque-method-1
+   '(contract (class/c #:opaque [m (-> any/c number? number?)])
+              (class object% (super-new) (define/public (m x) 3))
+              'pos
+              'neg))
+
+  (test/pos-blame
+   'class/c-first-order-opaque-method-2
+   '(contract (class/c #:opaque [m (-> any/c number? number?)])
+              (class object% (super-new) (define/public (m x) 3) (define/public (n) 4))
               'pos
               'neg))
   
@@ -6395,7 +6471,21 @@
               (class object% (super-new) (field [n 3]))
               'pos
               'neg))
+ 
+  (test/spec-passed
+   'class/c-first-order-opaque-field-1
+   '(contract (class/c #:opaque (field n))
+              (class object% (super-new) (field [n 3]))
+              'pos
+              'neg))
   
+  (test/pos-blame
+   'class/c-first-order-opaque-field-2
+   '(contract (class/c #:opaque (field n))
+              (class object% (super-new) (field [m 5] [n 3]))
+              'pos
+              'neg))
+              
   ;; No true first-order tests here, other than just to make
   ;; sure they're accepted.  For init-field, we can at least
   ;; make sure the given field is public (which happens
@@ -6515,6 +6605,20 @@
               'neg))
 
   (test/pos-blame
+   'class/c-first-order-opaque-super-1
+   '(contract (class/c #:opaque (super m))
+              (class (class object% (super-new) (define/public (m) 3)) (super-new))
+              'pos
+              'neg))
+              
+  (test/spec-passed
+   'class/c-first-order-opaque-super-2
+   '(contract (class/c #:opaque (super m) m)
+              (class (class object% (super-new) (define/public (m) 3)) (super-new))
+              'pos
+              'neg))
+
+  (test/pos-blame
    'class/c-first-order-inner-1
    '(contract (class/c (inner [m (-> any/c number? number?)]))
               object%
@@ -6584,6 +6688,22 @@
       (class c% (super-new) (define/augment (m) 5))))
   
   (test/pos-blame
+   'class/c-first-order-opaque-inner-1
+   '(contract (class/c #:opaque (inner m))
+              (let ([c% (class object% (super-new) (define/pubment (m x) (inner x m x)))])
+                (class c% (super-new) (define/augride (m x) (add1 x))))
+              'pos
+              'neg))
+              
+  (test/spec-passed
+   'class/c-first-order-opaque-inner-2
+   '(contract (class/c #:opaque (inner m) m)
+              (let ([c% (class object% (super-new) (define/pubment (m x) (inner x m x)))])
+                (class c% (super-new) (define/augride (m x) (add1 x))))
+              'pos
+              'neg))
+              
+  (test/pos-blame
    'class/c-first-order-override-1
    '(contract (class/c (override [m (-> any/c number? number?)]))
               object%
@@ -6651,6 +6771,22 @@
                         'pos
                         'neg)])
       (class c% (super-new) (define/override (m) 5))))
+ 
+  (test/pos-blame
+   'class/c-first-order-opaque-override-1
+   '(contract (class/c #:opaque (override m))
+              (let ([c% (class object% (super-new) (define/public (m x) (add1 x)))])
+                (class c% (super-new) (define/override (m x) (add1 (super m x)))))
+              'pos
+              'neg))
+              
+  (test/spec-passed
+   'class/c-first-order-opaque-override-2
+   '(contract (class/c #:opaque (override m) m)
+              (let ([c% (class object% (super-new) (define/public (m x) (add1 x)))])
+                (class c% (super-new) (define/override (m x) (add1 (super m x)))))
+              'pos
+              'neg))
 
   (test/pos-blame
    'class/c-first-order-augment-1
@@ -6720,6 +6856,20 @@
                         'pos
                         'neg)])
       (class c% (super-new) (inherit m))))
+      
+  (test/pos-blame
+   'class/c-first-order-opaque-augment-1
+   '(contract (class/c #:opaque (augment m))
+              (class object% (super-new) (define/pubment (m x) (add1 x)))
+              'pos
+              'neg))
+              
+  (test/spec-passed
+   'class/c-first-order-opaque-augment-2
+   '(contract (class/c #:opaque (augment m) m)
+              (class object% (super-new) (define/pubment (m x) (add1 x)))
+              'pos
+              'neg))
   
   (test/pos-blame
    'class/c-first-order-augride-1
@@ -6791,6 +6941,22 @@
                         'pos
                         'neg)])
       (class c% (super-new) (inherit m))))
+      
+  (test/pos-blame
+   'class/c-first-order-opaque-augride-1
+   '(contract (class/c #:opaque (augride m))
+              (let ([c% (class object% (super-new) (define/pubment (m x) (inner x m x)))])
+                (class c% (super-new) (define/augride (m x) (add1 x))))
+              'pos
+              'neg))
+              
+  (test/spec-passed
+   'class/c-first-order-opaque-augride-2
+   '(contract (class/c #:opaque (augride m) m)
+              (let ([c% (class object% (super-new) (define/pubment (m x) (inner x m x)))])
+                (class c% (super-new) (define/augride (m x) (add1 x))))
+              'pos
+              'neg))
   
   (test/pos-blame
    'class/c-first-order-inherit-1
@@ -6818,6 +6984,24 @@
                          'neg)]
            [d% (class c% (super-new) (inherit m) (define/public (f) (m 5)))])
       (send (new d%) f)))
+      
+  (test/pos-blame
+   'class/c-first-order-opaque-inherit-1
+   '(let* ([c% (contract (class/c #:opaque (inherit [m (-> any/c number? number?)]))
+                         (class object% (super-new) (define/public (m x) x))
+                         'pos
+                         'neg)]
+           [d% (class c% (super-new) (inherit m) (define/public (f) (m 5)))])
+      (send (new d%) f)))
+      
+  (test/spec-passed
+   'class/c-first-order-opaque-inherit-2
+   '(let* ([c% (contract (class/c #:opaque m (inherit [m (-> any/c number? number?)]))
+                         (class object% (super-new) (define/public (m x) x))
+                         'pos
+                         'neg)]
+           [d% (class c% (super-new) (inherit m) (define/public (f) (m 5)))])
+      (send (new d%) f)))
   
   (test/spec-passed
    'class/c-first-order-absent-1
@@ -6838,6 +7022,24 @@
    'class/c-first-order-absent-4
    '(contract (class/c (absent (field f)))
               (class object% (super-new) (field [f 3]))
+              'pos
+              'neg))
+              
+  (test/spec-passed
+   'class/c-first-order-opaque-absent-1
+   '(contract (class/c #:opaque (absent (field f))) object% 'pos 'neg))
+   
+  (test/pos-blame
+   'class/c-first-order-opaque-absent-2
+   '(contract (class/c #:opaque (absent (field f)))
+              (class object% (super-new) (field [g 0]))
+              'pos
+              'neg))
+              
+  (test/pos-blame
+   'class/c-first-order-opaque-absent-3
+   '(contract (class/c #:opaque (absent (field f g)))
+              (class object% (super-new) (field [g 0]))
               'pos
               'neg))
   
@@ -9435,6 +9637,9 @@ so that propagation occurs.
   (ctest #f flat-contract? (set/c (-> integer? integer?)))
   (ctest #t chaperone-contract? (set/c (-> integer? integer?)))
   
+  (ctest #t flat-contract? (list/c integer?))
+  (ctest #t chaperone-contract? (list/c (-> integer? integer?)))
+  
   ;; Make sure that impersonators cannot be used as the element contract in set/c.
   (contract-error-test
    'contract-error-test-set
@@ -11624,6 +11829,26 @@ so that propagation occurs.
       (eval '(require 'contract-out1-m))
       (eval '(f 10)))
    11)
+  
+  (test/spec-passed/result
+   'contract-out2
+   '(begin
+      (eval '(module contract-out2-m racket/base
+               (require racket/contract)
+               (provide (contract-out (struct s ([x integer?]))))
+               (struct s (x))))
+      (eval '(require 'contract-out2-m))
+      (eval '(s-x (s 11))))
+   11)
+  
+  ;; expect the syntax errors in the right order
+  (contract-syntax-error-test
+   'contract-out3
+   '(eval '(module contract-out3-m racket/base
+             (require racket/contract)
+             (provide (contract-out garbage))
+             (λ)))
+   #rx"contract-out")
   
 ;                                                            
 ;                                                            

@@ -37,6 +37,7 @@ remain the same for tools that use them.
     execute-callback
     get-current-tab
     open-in-new-tab
+    create-new-tab
     close-current-tab
     on-tab-change
     enable-evaluation
@@ -104,8 +105,7 @@ remain the same for tools that use them.
     
     get-directory      ;; (-> (union #f string[existing directory]))
     ;; returns the directory that should be the default for
-    ;; the `current-directory' and `current-load-relative-directory'
-    ;; parameters in the repl.
+    ;; the `current-directory' parameter in the repl.
     ))
 
 (define unit:tab<%>

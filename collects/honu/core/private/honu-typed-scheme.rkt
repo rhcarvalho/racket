@@ -9,12 +9,14 @@
                      syntax/parse/experimental/splicing
                      scheme/splicing
                      macro-debugger/emit
+                     racket/pretty
+                     "compile.rkt"
                      "debug.rkt"
                      "contexts.rkt"
                      "util.rkt"
                      "ops.rkt"
                      "syntax.rkt"
-                     "parse.rkt"
+                     ;; "parse.rkt"
                      "parse2.rkt"
                      "literals.rkt"
                      )
@@ -22,17 +24,18 @@
          "literals.rkt"
          "debug.rkt"
          ;; (prefix-in honu: "honu.rkt")
-         (prefix-in honu: "macro2.rkt")
+         ;; (prefix-in honu: "macro2.rkt")
          ;; "typed-utils.ss"
          )
 
-(require (for-meta 2 scheme/base "util.rkt"))
-(require (for-meta 3 scheme/base))
+(require (for-meta 2 racket/base "util.rkt"))
+(require (for-meta 3 racket/base))
 
 (provide (all-defined-out))
 
 (begin-for-syntax
 
+#;
 (define parse-expr
   ;; The given syntax sequence must not be empty
   (let ()
@@ -207,6 +210,7 @@
 
     parse-expr))
 
+#;
 (define (parse-tail-expr expr-stxs)
   (syntax-parse expr-stxs
     #:literals (honu-return)
@@ -216,6 +220,7 @@
     [else (parse-expr expr-stxs)]))
 
 
+#;
 (define (parse-block-one context body combine-k done-k)
   (define (parse-one expr-stxs after-expr terminator)
     (define (checks)
@@ -252,6 +257,7 @@
                                                  ))
                        parse-one )]))
 
+#;
 (define (parse-block stx ctx)
   (let loop ([stx stx])
     (parse-block-one ctx
@@ -293,6 +299,7 @@ Then, in the pattern above for 'if', 'then' would be bound to the following synt
       (syntax/loc stx
                  (define-syntax id (make-honu-infix-transformer rhs))))))
 
+#;
 (honu:define-honu-syntax honu-macro-item
   (lambda (stx ctx)
     (syntax-parse stx
@@ -302,6 +309,7 @@ Then, in the pattern above for 'if', 'then' would be bound to the following synt
        (values #'(define-syntax-class name [pattern x])
                #'rest)])))
 
+#;
 (honu:define-honu-syntax honu-scheme
   (lambda (stx ctx)
     (syntax-parse stx #:literals (semicolon)
@@ -310,6 +318,7 @@ Then, in the pattern above for 'if', 'then' would be bound to the following synt
       [else (raise-syntax-error 'scheme "need a semicolon probably" stx)]
       )))
 
+#;
 (honu:define-honu-syntax honu-keywords
   (lambda (stx ctx)
     (syntax-parse stx #:literals (semicolon)
@@ -355,8 +364,6 @@ Then, in the pattern above for 'if', 'then' would be bound to the following synt
            #'rest))])))
 |#
 
-(define true #t)
-(define false #f)
 
 (define (show-top-result v)
   (unless (void? v)
@@ -382,6 +389,7 @@ Then, in the pattern above for 'if', 'then' would be bound to the following synt
 (define (display2 x y)
   (debug "~a ~a" x y))
 
+#;
 (define-syntax (honu-unparsed-expr stx)
   (syntax-parse stx
     [(_ expr ...)
@@ -389,6 +397,7 @@ Then, in the pattern above for 'if', 'then' would be bound to the following synt
      (parse-an-expr #'(expr ...))]
     [else (raise-syntax-error 'honu-unparsed-expr "Invalid expression syntax" stx)]))
 
+#;
 (honu:define-honu-syntax scheme-syntax
   (lambda (body ctx)
     (syntax-parse body
@@ -399,6 +408,7 @@ Then, in the pattern above for 'if', 'then' would be bound to the following synt
            (apply-scheme-syntax #'#'template))
          #'rest)])))
 
+#;
 (honu:define-honu-syntax honu-provide
   (lambda (body ctx)
     (syntax-parse body #:literals (semicolon)
@@ -451,6 +461,7 @@ Then, in the pattern above for 'if', 'then' would be bound to the following synt
 (define-for-syntax (honu-compile forms)
   #'(void))
 
+(provide honu-unparsed-begin)
 (define-syntax (honu-unparsed-begin stx)
   (emit-remark "Honu unparsed begin!" stx)
   (debug "honu unparsed begin: ~a at phase ~a\n" (syntax->datum stx) (syntax-local-phase-level))
@@ -464,8 +475,9 @@ Then, in the pattern above for 'if', 'then' would be bound to the following synt
      ;; if parsed is #f then we don't want to expand to anything that will print
      ;; so use an empty form, begin, `parsed' could be #f becuase there was no expression
      ;; in the input such as parsing just ";".
-     (with-syntax ([parsed (if (not parsed) #'(begin) parsed)]
+     (with-syntax ([parsed (if (not parsed) #'(begin) (honu->racket parsed))]
                    [(unparsed ...) unparsed])
+       (debug "Final parsed syntax\n~a\n" (pretty-format (syntax->datum #'parsed)))
        (if (null? (syntax->datum #'(unparsed ...)))
          #'parsed
          #'(begin parsed (honu-unparsed-begin unparsed ...))))]))
@@ -474,5 +486,12 @@ Then, in the pattern above for 'if', 'then' would be bound to the following synt
   (syntax-case stx ()
     [(_ forms ...)
      (begin
-       (debug "Module begin ~a\n" (syntax->datum #'(forms ...)))
+       (debug "Module begin ~a\n" (pretty-format (syntax->datum #'(forms ...))))
        #'(#%module-begin (honu-unparsed-begin forms ...)))]))
+
+(provide honu-top-interaction)
+(define-syntax (honu-top-interaction stx)
+  (syntax-case stx ()
+    [(_ rest ...)
+     #'(#%top-interaction . (honu-unparsed-begin rest ...))]))
+

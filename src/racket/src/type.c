@@ -1,6 +1,6 @@
 /*
   Racket
-  Copyright (c) 2004-2011 PLT Scheme Inc.
+  Copyright (c) 2004-2012 PLT Scheme Inc.
   Copyright (c) 1995-2001 Matthew Flatt
 
     This library is free software; you can redistribute it and/or
@@ -263,6 +263,7 @@ scheme_init_type ()
   set_name(scheme_always_evt_type, "<always-evt>");
   set_name(scheme_never_evt_type, "<never-evt>");
   set_name(scheme_thread_recv_evt_type, "<thread-receive-evt>");
+  set_name(scheme_port_closed_evt_type, "<port-closed-evt>");
 
   set_name(scheme_thread_resume_type, "<thread-resume-evt>");
   set_name(scheme_thread_suspend_type, "<thread-suspend-evt>");
@@ -300,6 +301,9 @@ scheme_init_type ()
   set_name(scheme_place_type, "<place>");
   set_name(scheme_place_async_channel_type, "<place-half-channel>");
   set_name(scheme_place_bi_channel_type, "<place-channel>");
+  set_name(scheme_place_dead_type, "<place-dead-evt>");
+
+  set_name(scheme_resolved_module_path_type, "<resolve-module-path>");
 
 #ifdef MZ_GC_BACKTRACE
   set_name(scheme_rt_meta_cont, "<meta-continuation>");
@@ -388,9 +392,16 @@ Scheme_Type scheme_make_type(const char *name)
 
 char *scheme_get_type_name(Scheme_Type t)
 {
+  char *s;
   if (t < 0 || t >= maxtype)
     return "<bad-value>";
-  return type_names[t];
+  s = type_names[t];
+#ifndef MZ_GC_BACKTRACE
+  if (!s)
+    return "???";
+  else
+#endif
+    return s;
 }
 
 void scheme_install_type_reader(Scheme_Type t, Scheme_Type_Reader f)
@@ -551,6 +562,7 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_module_type, module_val);
   GC_REG_TRAV(scheme_rt_export_info, exp_info_val);
   GC_REG_TRAV(scheme_require_form_type, twoptr_obj);
+  GC_REG_TRAV(scheme_inline_variant_type, vector_obj);
 
   GC_REG_TRAV(_scheme_values_types_, bad_trav);
   
@@ -660,6 +672,7 @@ void scheme_register_traversers(void)
   GC_REG_TRAV(scheme_always_evt_type, char_obj);
   GC_REG_TRAV(scheme_never_evt_type, char_obj);
   GC_REG_TRAV(scheme_thread_recv_evt_type, char_obj);
+  GC_REG_TRAV(scheme_port_closed_evt_type, small_object);
 
   GC_REG_TRAV(scheme_inspector_type, mark_inspector);
 

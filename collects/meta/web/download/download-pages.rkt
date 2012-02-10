@@ -51,12 +51,13 @@
   (define ver (release-version rel))
   (define title @list{v@ver Release Notes})
   @page[#:file (format "v~a.html" ver) #:title title #:part-of 'download]{
-    @h2{Release Announcements for Version @ver}
-    @pre{@release-announcement[rel]}
+    @table[align: 'center]{
+      @tr{@td{@h2{Release Announcements for Version @ver}}}
+      @tr{@td{@pre{@release-announcement[rel]}}}}
   })
 (define release-page
   (let ([t (make-hash)])
-    (lambda (rel) (hash-ref! t rel (lambda () (release-page* rel))))))
+    (λ (rel) (hash-ref! t rel (λ () (release-page* rel))))))
 
 (define all-version-pages
   (let ()
@@ -86,21 +87,21 @@
              rules: 'groups]{
         @thead{
           @tr{@td{@nbsp @strong{Version & Release Notes}}
-              @(map (lambda (p) @th[align: 'center]{@(package->name p)})
+              @(map (λ (p) @th[align: 'center]{@(package->name p)})
                     all-packages)}}
         @(let ([sep (tr style: "height: 4px; margin: 0; padding: 0;"
-                        (td) (map (lambda (_) (td)) all-packages))])
+                        (td) (map (λ (_) (td)) all-packages))])
            (define (cell rel pkg)
              @td[align: 'center]{
                @nbsp @(make-page rel pkg){[download]} @nbsp})
            @tbody{
              @sep
-             @(map (lambda (r)
+             @(map (λ (r)
                      @list{
                        @tr[class: 'version-row]{
                          @td{@|nbsp nbsp| @strong{Version @release-version[r]},
                              @(release-page r){@release-date-string[r]} @nbsp}
-                         @(map (lambda (p) (cell r p)) all-packages)}
+                         @(map (λ (p) (cell r p)) all-packages)}
                        @sep})
                    all-releases)})
         @tfoot{
@@ -148,6 +149,11 @@
           Solaris  = /Solaris/;
       if (p == null) return [];
       else if (l("SunOS")) return [Solaris, Unix];
+      @; Note about Windows 64: seems like the best guess could be done by
+      @; checking that the platform has "Win64" or navigator.userAgent has
+      @; either "Win64" or "WOW64".  But the 32 build might be better for many
+      @; people anyway, so keep things as is for now.  (With the `Win' filter
+      @; which will get the 32 version first and the 64 second.)
       else if (l("Win"))   return [Win];
       else if (l("Mac"))   return [(l("Intel")?MacIntel:MacPPC), Mac, Unix];
       else if (l("Linux")) {

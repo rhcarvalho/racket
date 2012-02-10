@@ -5,15 +5,18 @@
          scribble/decode
          (only-in "../inside/utils.rkt" cpp)
          (for-syntax racket/base)
+         scribble/racket
          (for-label racket/base
                     racket/contract
                     (except-in ffi/unsafe ->)
                     ffi/unsafe/cvector
-                    ffi/vector))
+                    ffi/vector
+                    (only-in ffi/unsafe [-> ->>])))
 
 (provide cpp
-         InsideRacket
+         InsideRacket InsideRacket-doc
          guide.scrbl
+         ->>
          (all-from-out scribble/manual)
          (for-label (all-from-out racket/base
                                   racket/contract
@@ -21,8 +24,15 @@
                                   ffi/unsafe/cvector
                                   ffi/vector)))
 
+(define InsideRacket-doc '(lib "scribblings/inside/inside.scrbl"))
+
 (define InsideRacket
-  (other-manual '(lib "scribblings/inside/inside.scrbl")))
+  (other-manual InsideRacket-doc))
 
 (define guide.scrbl
   '(lib "scribblings/guide/guide.scrbl"))
+
+(define-syntax ->>
+  (make-element-id-transformer
+    (lambda (stx)
+      #'(racketlink ->> #:style "plainlink" (racketkeywordfont "->")))))

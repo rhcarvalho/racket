@@ -1,6 +1,6 @@
 /*
   Racket
-  Copyright (c) 2006-2011 PLT Scheme Inc.
+  Copyright (c) 2006-2012 PLT Scheme Inc.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Library General Public
@@ -27,6 +27,8 @@
 
 #include "jit.h"
 
+static Scheme_Object *extract_one_cc_mark_to_tag(Scheme_Object *, Scheme_Object *, Scheme_Object *);
+
 #define JITINLINE_TS_PROCS
 #ifndef CAN_INLINE_ALLOC
 # define JIT_BOX_TS_PROCS
@@ -47,10 +49,21 @@ static Scheme_Object *ts_scheme_make_fsemaphore(int argc, Scheme_Object **argv)
 # define ts_scheme_make_fsemaphore scheme_make_fsemaphore
 #endif
 
+static Scheme_Object *extract_one_cc_mark_to_tag(Scheme_Object *mark_set, 
+                                                 Scheme_Object *key,
+                                                 Scheme_Object *prompt_tag)
+  XFORM_SKIP_PROC
+{
+  /* wrapper on scheme_extract_one_cc_mark_to_tag() to convert NULL to false */
+  Scheme_Object *r;
+  r = scheme_extract_one_cc_mark_to_tag(mark_set, key, prompt_tag);
+  if (!r) return scheme_false;
+  return r;
+}
+
 static Scheme_Object *cont_mark_set_first_try_fast(Scheme_Object *cms, Scheme_Object *key)
   XFORM_SKIP_PROC
 {
-  Scheme_Object *r;
   Scheme_Object *nullableCms;
   Scheme_Object *prompt_tag; 
   
@@ -95,11 +108,9 @@ static Scheme_Object *cont_mark_set_first_try_fast(Scheme_Object *cms, Scheme_Ob
     }
   }
 
-  /* Otherwise, slow path */
-  r = ts_scheme_extract_one_cc_mark_to_tag(nullableCms, key, prompt_tag);
-  if (!r) r = scheme_false;
-
-  return r;
+  /* Otherwise, slow path. This must be a "tail call", because the
+     calling context may be captured as a lightweight continuation. */
+  return ts_extract_one_cc_mark_to_tag(nullableCms, key, prompt_tag);
 }
 
 static int generate_two_args(Scheme_Object *rand1, Scheme_Object *rand2, mz_jit_state *jitter, 
@@ -109,25 +120,21 @@ static int check_val_struct_prim(Scheme_Object *p, int arity)
 {
   if (p && SCHEME_PRIMP(p)) {
     if (arity == 1) {
-      if (((Scheme_Primitive_Proc *)p)->pp.flags & SCHEME_PRIM_IS_STRUCT_PRED)
+      int t = (((Scheme_Primitive_Proc *)p)->pp.flags & SCHEME_PRIM_OTHER_TYPE_MASK);
+      if (t == SCHEME_PRIM_STRUCT_TYPE_PRED)
         return 1;
-      else if (((Scheme_Primitive_Proc *)p)->pp.flags & SCHEME_PRIM_IS_STRUCT_INDEXED_GETTER)
+      if (t == SCHEME_PRIM_STRUCT_TYPE_INDEXED_GETTER)
         return 2;
-      else if (((Scheme_Primitive_Proc *)p)->pp.flags & SCHEME_PRIM_IS_STRUCT_OTHER) {
-        int t = (((Scheme_Primitive_Proc *)p)->pp.flags & SCHEME_PRIM_OTHER_TYPE_MASK);
-        if (t == SCHEME_PRIM_TYPE_STRUCT_PROP_GETTER)
-          return 4;
-        else if (t == SCHEME_PRIM_TYPE_STRUCT_PROP_PRED)
-          return 6;
-      }
+      else if (t == SCHEME_PRIM_TYPE_STRUCT_PROP_GETTER)
+        return 4;
+      else if (t == SCHEME_PRIM_STRUCT_TYPE_STRUCT_PROP_PRED)
+        return 6;
     } else if (arity == 2) {
-      if ((((Scheme_Primitive_Proc *)p)->pp.flags & SCHEME_PRIM_IS_STRUCT_OTHER)) {
-        int t = (((Scheme_Primitive_Proc *)p)->pp.flags & SCHEME_PRIM_OTHER_TYPE_MASK);
-        if (t == SCHEME_PRIM_STRUCT_TYPE_INDEXED_SETTER)
-          return 3;
-        else if (t == SCHEME_PRIM_TYPE_STRUCT_PROP_GETTER)
-          return 5;
-      }
+      int t = (((Scheme_Primitive_Proc *)p)->pp.flags & SCHEME_PRIM_OTHER_TYPE_MASK);
+      if (t == SCHEME_PRIM_STRUCT_TYPE_INDEXED_SETTER)
+        return 3;
+      else if (t == SCHEME_PRIM_TYPE_STRUCT_PROP_GETTER)
+        return 5;
     }
   }
   return 0;
@@ -524,6 +531,9 @@ int scheme_generate_inlined_unary(mz_jit_state *jitter, Scheme_App2_Rec *app, in
     return 1;
   } else if (IS_NAMED_PRIM(rator, "null?")) {
     generate_inlined_constant_test(jitter, app, scheme_null, NULL, for_branch, branch_short, need_sync);
+    return 1;
+  } else if (IS_NAMED_PRIM(rator, "void?")) {
+    generate_inlined_constant_test(jitter, app, scheme_void, NULL, for_branch, branch_short, need_sync);
     return 1;
   } else if (IS_NAMED_PRIM(rator, "pair?")) {
     generate_inlined_type_test(jitter, app, scheme_pair_type, scheme_pair_type, 0, for_branch, branch_short, need_sync);
@@ -1746,7 +1756,7 @@ int scheme_generate_inlined_binary(mz_jit_state *jitter, Scheme_App3_Rec *app, i
 
     if (SCHEME_TYPE(a1) > _scheme_values_types_) {
       /* Compare to constant: */
-      int retptr, reg_status;
+      int reg_status;
 
       mz_runstack_skipped(jitter, 2);
 
@@ -1756,14 +1766,6 @@ int scheme_generate_inlined_binary(mz_jit_state *jitter, Scheme_App3_Rec *app, i
       
       mz_runstack_unskipped(jitter, 2);
 
-      if (!SCHEME_INTP(a1)
-	  && !SCHEME_FALSEP(a1)
-	  && !SCHEME_VOIDP(a1)
-	  && !SAME_OBJ(a1, scheme_true))
-	retptr = mz_retain(a1);
-      else
-	retptr = 0;
-      
       __START_SHORT_JUMPS__(branch_short);
 
       if (for_branch) {
@@ -1773,23 +1775,23 @@ int scheme_generate_inlined_binary(mz_jit_state *jitter, Scheme_App3_Rec *app, i
 
       reg_status = mz_CURRENT_REG_STATUS_VALID();
       
-#ifdef JIT_PRECISE_GC
-      if (retptr) {
-	scheme_mz_load_retained(jitter, JIT_R1, retptr);
+      if (!SCHEME_INTP(a1)
+	  && !SCHEME_FALSEP(a1)
+	  && !SCHEME_VOIDP(a1)
+	  && !SAME_OBJ(a1, scheme_true)) {
+	scheme_mz_load_retained(jitter, JIT_R1, a1);
 	ref = jit_bner_p(jit_forward(), JIT_R0, JIT_R1);
-      } else
-#endif
+        /* In case true is a fall-through, note that the test 
+           didn't disturb R0: */
+        if (for_branch) mz_SET_R0_STATUS_VALID(reg_status);
+      } else {
 	ref = mz_bnei_p(jit_forward(), JIT_R0, a1);
+        /* In case true is a fall-through, note that the test 
+           didn't disturb R0 or R1: */
+        if (for_branch) mz_SET_REG_STATUS_VALID(reg_status);
+      }
 
       if (for_branch) {
-        /* In case true is a fall-through, note that the test 
-           didn't disturb R0 (and maybe not R1): */
-#ifdef JIT_PRECISE_GC
-        if (retptr)
-          mz_SET_R0_STATUS_VALID(reg_status);
-        else
-#endif
-          mz_SET_REG_STATUS_VALID(reg_status);
         scheme_add_branch_false(for_branch, ref);
         scheme_branch_for_true(jitter, for_branch);
         CHECK_LIMIT();

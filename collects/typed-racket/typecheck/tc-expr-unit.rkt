@@ -4,7 +4,7 @@
 (require (rename-in "../utils/utils.rkt" [private private-in])
          racket/match (prefix-in - scheme/contract)
          "signatures.rkt" "tc-envops.rkt" "tc-metafunctions.rkt" "tc-subst.rkt"
-         "check-below.rkt" "tc-funapp.rkt"
+         "check-below.rkt" "tc-funapp.rkt" "tc-app-helper.rkt"
          (types utils convenience union subtype remove-intersect type-table filter-ops)
          (private-in parse-type type-annotation)
          (rep type-rep)
@@ -14,7 +14,8 @@
          racket/private/class-internal
          (except-in syntax/parse id)
          unstable/function #;unstable/debug
-         (only-in srfi/1 split-at))
+         (only-in srfi/1 split-at)
+         (for-template "internal-forms.rkt"))
 
 (require (for-template scheme/base racket/private/class-internal))
 
@@ -102,10 +103,16 @@
        [_ (make-HeterogenousVector (for/list ([l (syntax-e #'i)])
                                      (generalize (tc-literal l #f))))])]
     [(~var i (3d hash?))
-     (let* ([h (syntax-e #'i)]
-            [ks (hash-map h (lambda (x y) (tc-literal x)))]
-            [vs (hash-map h (lambda (x y) (tc-literal y)))])
-       (make-Hashtable (generalize (apply Un ks)) (generalize (apply Un vs))))]
+     (match expected
+       [(Hashtable: k v)
+        (let* ([h (syntax-e #'i)]
+               [ks (hash-map h (lambda (x y) (tc-literal x k)))]
+               [vs (hash-map h (lambda (x y) (tc-literal y v)))])
+          (make-Hashtable (generalize (check-below (apply Un ks)) k) (generalize (check-below (apply Un vs)))))]
+       [_ (let* ([h (syntax-e #'i)]
+                 [ks (hash-map h (lambda (x y) (tc-literal x)))]
+                 [vs (hash-map h (lambda (x y) (tc-literal y)))])
+            (make-Hashtable (generalize (apply Un ks)) (generalize (apply Un vs))))])]
     [(a . b) (-pair (tc-literal #'a) (tc-literal #'b))]
     [_ Univ]))
 
@@ -129,17 +136,18 @@
         ([inst (in-improper-stx inst)])
         (cond [(not inst) ty]
               [(not (or (Poly? ty) (PolyDots? ty)))
-               (tc-error/expr #:return (Un) "Cannot instantiate non-polymorphic type ~a" ty)]
+               (tc-error/expr #:return (Un) "Cannot instantiate non-polymorphic type ~a"
+                              (cleanup-type ty))]
               [(and (Poly? ty)
                     (not (= (length (syntax->list inst)) (Poly-n ty))))
                (tc-error/expr #:return (Un)
                               "Wrong number of type arguments to polymorphic type ~a:\nexpected: ~a\ngot: ~a"
-                              ty (Poly-n ty) (length (syntax->list inst)))]
+                              (cleanup-type ty) (Poly-n ty) (length (syntax->list inst)))]
               [(and (PolyDots? ty) (not (>= (length (syntax->list inst)) (sub1 (PolyDots-n ty)))))
                ;; we can provide 0 arguments for the ... var
                (tc-error/expr #:return (Un)
                               "Wrong number of type arguments to polymorphic type ~a:\nexpected at least: ~a\ngot: ~a"
-                              ty (sub1 (PolyDots-n ty)) (length (syntax->list inst)))]
+                              (cleanup-type ty) (sub1 (PolyDots-n ty)) (length (syntax->list inst)))]
               [(PolyDots? ty)
                ;; In this case, we need to check the last thing.  If it's a dotted var, then we need to
                ;; use instantiate-poly-dotted, otherwise we do the normal thing.
@@ -229,6 +237,15 @@
                     (add-typeof-expr form t)
                     t)]))))
 
+(define (explicit-fail stx msg var)
+  (cond [(and (identifier? var) (lookup-type/lexical var #:fail (λ _ #f)))
+         =>
+         (λ (t)
+           (tc-error/expr #:return (ret (Un)) #:stx stx
+                          (string-append (syntax-e msg) "; missing coverage of ~a")
+                          t))]
+         [else (tc-error/expr #:return (ret (Un)) #:stx stx (syntax-e msg))]))
+
 ;; tc-expr/check : syntax tc-results -> tc-results
 (define/cond-contract (tc-expr/check/internal form expected)
   (--> syntax? tc-results? tc-results?)
@@ -255,6 +272,9 @@
            (unless ty
              (int-err "internal error: ignore-some"))
            (check-below ty expected))]
+        ;; explicit failure
+        [(quote-syntax ((~literal typecheck-fail-internal) stx msg:str var))
+         (explicit-fail #'stx #'msg #'var)]
         ;; data
         [(quote #f) (ret (-val #f) false-filter)]
         [(quote #t) (ret (-val #t) true-filter)]
@@ -349,7 +369,9 @@
          (unless ty
            (int-err "internal error: ignore-some"))
          ty)]
-
+      ;; explicit failure
+      [(quote-syntax ((~literal typecheck-fail-internal) stx msg var))
+       (explicit-fail #'stx #'msg #'var)]
       ;; data
       [(quote #f) (ret (-val #f) false-filter)]
       [(quote #t) (ret (-val #t) true-filter)]

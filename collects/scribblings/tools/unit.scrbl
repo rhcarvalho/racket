@@ -608,6 +608,18 @@ Returns the currently active tab.
   It loads that file in the definitions window of the new tab.
 }
 
+@defmethod[(create-new-tab) void?]{
+  Creates a new tab.
+}
+
+@defmethod[(next-tab) void?]{
+  Switches to the next tab.
+}
+
+@defmethod[(prev-tab) void?]{
+  Switches to the previous tab.
+}
+
 @defmethod[#:mode public-final (close-current-tab) void?]{
   Closes the current tab, making some other tab visible.
   If there is only one tab open, this method does nothing.
@@ -734,7 +746,7 @@ that the button is not referenced by this frame and thus can be gc'd.
 
 @defclass[drracket:unit:definitions-text%
           (drracket:rep:drs-bindings-keymap-mixin
-           (drracket:unit:program-editor-mixin (scheme:text-mixin text:info%)))
+           (drracket:unit:program-editor-mixin (racket:text-mixin text:info%)))
           (drracket:unit:definitions-text<%>)]{
 
 @defconstructor[()]{

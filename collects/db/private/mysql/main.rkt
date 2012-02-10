@@ -2,8 +2,8 @@
 (require racket/class
          racket/tcp
          openssl
-         file/sha1
          "../generic/interfaces.rkt"
+         "../generic/common.rkt"
          "../generic/socket.rkt"
          "connection.rkt")
 (provide mysql-connect
@@ -11,7 +11,7 @@
          mysql-password-hash)
 
 (define (mysql-connect #:user user
-                       #:database database
+                       #:database [database #f]
                        #:password [password #f]
                        #:server [server #f]
                        #:port [port #f]
@@ -21,7 +21,8 @@
                                       (case ssl
                                         ((no) #f)
                                         (else (ssl-make-client-context 'tls)))]
-                       #:notice-handler [notice-handler void])
+                       #:notice-handler [notice-handler void]
+                       #:debug? [debug? #f])
   (let ([connection-options
          (+ (if (or server port) 1 0)
             (if socket 1 0))])
@@ -31,6 +32,7 @@
           (cond [(procedure? notice-handler) notice-handler]
                 [else (make-print-notice notice-handler)])]
          [c (new connection% (notice-handler notice-handler))])
+    (when debug? (send c debug #t))
     (cond [socket
            (let ([socket (if (eq? socket 'guess)
                              (mysql-guess-socket-path)
@@ -60,6 +62,3 @@
 
 (define (mysql-guess-socket-path)
   (guess-socket-path/paths 'mysql-guess-socket-path socket-paths))
-
-(define (mysql-password-hash password)
-  (bytes->hex-string (password-hash password)))

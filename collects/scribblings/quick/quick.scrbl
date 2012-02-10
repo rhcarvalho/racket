@@ -273,8 +273,8 @@ environment of the expression determines the identifier's
 binding. This rule applies to identifiers in a @racket[lambda] body as
 well as anywhere else.
 
-For example, in the following @racket[rgb-series] function the uses
-of @racket[mk] in each @racket[lambda] form to refer to the argument of
+In the following @racket[rgb-series] function, the uses
+of @racket[mk] in each @racket[lambda] form refer to the argument of
 @racket[rgb-series], since that's the binding that is textually in
 scope:
 
@@ -485,7 +485,7 @@ is @racket[(hc-append 10 expr (code expr))].  In particular,
 @racket[(circle 10)] as @racket[expr], so it is replaced with
 @racket[(hc-append 10 (circle 10) (code (circle 10)))].
 
-Of course, the sword of syntactic extension cuts both ways: inventing
+Of course, this sort of syntactic extension cuts both ways: inventing
 a new language can make it easier to say what you want, but harder for
 others to understand. As it happens, the developers of Racket are
 constantly giving talks and writing papers that involve Racket code,

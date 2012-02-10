@@ -17,7 +17,7 @@
                                           (syntax-local-name))])
                             (if name (list '#:id `',name) '())))]
                        ;; delay body, allow definitions
-                       [body #`(lambda () (begin/text #,@xs))])
+                       [body #`(λ () (begin/text #,@xs))])
            #'(layouter id ... x ... body))])))
 
 (define (get-path who id file sfx dir)
@@ -41,14 +41,12 @@
   (syntax-case stx () [(_ . xs) (process-contents 'plain #'plain* stx #'xs)]))
 (define (plain* #:id [id #f] #:suffix [suffix #f]
                 #:dir [dir #f] #:file [file #f]
-                #:referrer
-                [referrer (lambda (url)
-                            (error 'plain "no referrer for ~e" file))]
+                #:referrer [referrer values]
                 #:newline [newline? #t]
                 content)
-  (resource (get-path 'plain id file suffix dir)
-            (file-writer output (list content (and newline? "\n")))
-            referrer))
+  (resource/referrer (get-path 'plain id file suffix dir)
+                     (file-writer output (list content (and newline? "\n")))
+                     referrer))
 
 ;; page layout function
 (define-syntax (page stx)
@@ -73,7 +71,7 @@
                #:extra-body-attrs [body-attrs #f]
                #:resources resources ; see below
                #:referrer [referrer
-                           (lambda (url . more)
+                           (λ (url . more)
                              (a href: url (if (null? more) linktitle more)))]
                ;; will be used instead of `this' to determine navbar highlights
                #:part-of [part-of #f]
@@ -96,9 +94,9 @@
                 (body content))
              @||}))
   (define this (and (not html-only?)
-                    (resource (get-path 'plain id file "html" dir)
-                              (file-writer output-xml page)
-                              referrer)))
+                    (resource/referrer (get-path 'plain id file "html" dir)
+                                       (file-writer output-xml page)
+                                       referrer)))
   (when this (pages->part-of this (or part-of this)))
   (or this page))
 
@@ -140,7 +138,7 @@
           (middle-text 80 ")")
           (middle-text 100 ")")))
   (define (header-cell logo)
-    (td (a href: (get-resource-path (force top-promise))
+    (td (a href: (url-of (force top-promise))
            OPEN
            (img src: logo alt: "[logo]"
                 style: '("vertical-align: middle; "
@@ -148,7 +146,7 @@
            CLOSE)))
   (define (links-table this)
     (table width: "100%"
-      (tr (map (lambda (nav navpart)
+      (tr (map (λ (nav navpart)
                  (td class: 'navlinkcell
                    (span class: 'navitem
                      (span class: (if (eq? (pages->part-of this) navpart)
@@ -156,7 +154,7 @@
                        nav))))
                (force pages-promise)
                (force pages-parts-of-promise)))))
-  (lambda (this)
+  (λ (this)
     (div class: 'racketnav
       (div class: 'navcontent
         (table border: 0 cellspacing: 0 cellpadding: 0 width: "100%"
@@ -170,7 +168,7 @@
   (define headers
     @list{@link[rel: "icon" href: icon type: "image/ico"]
           @link[rel: "shortcut icon" href: icon]})
-  (lambda () headers))
+  (λ () headers))
 
 (define (html-head-maker style favicon)
   (define headers
@@ -178,7 +176,7 @@
           @meta[http-equiv: "Content-Type" content: "text/html; charset=utf-8"]
           @favicon
           @style})
-  (lambda (title* more-headers)
+  (λ (title* more-headers)
     (head "\n" (title title*)
           "\n" headers
           (and more-headers (list "\n" more-headers))
@@ -188,14 +186,14 @@
   (let* ([favicon     (html-favicon-maker icon)]
          [make-head   (html-head-maker style favicon)]
          [make-navbar (navbar-maker logo)])
-    (lambda (what . more)
+    (λ (what . more)
       (apply (case what
                [(head)   make-head]
                [(navbar) make-navbar]
                [(favicon-headers) favicon]
-               [(icon-path)  (lambda () (get-resource-path icon))]
-               [(logo-path)  (lambda () (get-resource-path logo))]
-               [(style-path) (lambda () (get-resource-path style))]
+               [(icon-path)  (λ () (url-of icon))]
+               [(logo-path)  (λ () (url-of logo))]
+               [(style-path) (λ () (url-of style))]
                [else (error 'resources "internal error")])
              more))))
 
@@ -224,10 +222,10 @@
               (page #:resources resources-id #:dir dir . xs))
             (define-syntax-rule (plain-id . xs)
               (plain #:dir dir . xs))
-            (define (copyfile-id source [target #f] [referrer values])
-              (copyfile-resource source target referrer #:dir dir))
-            (define (symlink-id source [target #f] [referrer values])
-              (symlink-resource source target referrer #:dir dir))
+            (define (copyfile-id source [target #f])
+              (copyfile-resource source target #:dir dir))
+            (define (symlink-id source [target #f])
+              (symlink-resource source target #:dir dir))
             provides))))
   (syntax-case stx ()
     [(_ dir) (make-it #'dir)]

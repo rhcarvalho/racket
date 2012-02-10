@@ -310,7 +310,7 @@ please adhere to these guidelines:
  (plt:hd:refresh-downloading... "Загрузить ~a...")
  (plt:hd:refresh-deleting... "Удалить старую версию ~a...")
  (plt:hd:refresh-installing... "Инсталировать новую версию ~a...")
- (plt:hd:refresh-clearing-indicies "Очистить кешированные индексы")
+ (plt:hd:refresh-clearing-indices "Очистить кешированные индексы")
  (plt:hd:refreshing-manuals-finished "Готово.")
  (plt:hd:about-help-desk "О помощи")
  (plt:hd:help-desk-about-string
@@ -1252,10 +1252,10 @@ please adhere to these guidelines:
  (stepper-language-level-message "Пошаговое выполнение не работает для языка \"~a\".")
  (stepper-button-label "Шаг")
 
- (stepper-previous-application "|< Программа")
- (stepper-previous "< Шаг")
- (stepper-next "Шаг >")
- (stepper-next-application "Программа >|")
+ (stepper-previous-application "Программа")
+ (stepper-previous "Шаг")
+ (stepper-next "Шаг")
+ (stepper-next-application "Программа")
  (stepper-jump "Перейти...") ;; this one is changed.  action?
  (stepper-out-of-steps "Вычисления завершены ранее, чем достигнут искомый шаг.")
  (stepper-no-such-step/title "Шаг не найден")

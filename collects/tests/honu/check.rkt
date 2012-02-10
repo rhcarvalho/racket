@@ -38,7 +38,8 @@
   ;; (printf "output '~a'\n" stuff)
   (apply string-append "" (append stuff (list "\n"))))
 
-(define (test input output)
+(define (test name input output)
+  (printf "Running test ~a\n" name)
   (define final (run-honu input))
   (when (not (same? final output))
     (printf "Not the same!\n'~a'\nvs\n'~a'\n" final output)))
@@ -47,6 +48,7 @@
   (apply string-append "#lang honu\n" stuff))
 
 (test
+  "basic numbers"
   @input{
   5
   6
@@ -57,38 +59,52 @@
   })
 
 (test
+  "basic math"
   @input{
   1 + 1
+  1 + 2 * 3
+  3 * 2 + 1
+  1 + 4 ^ 2 * 3
+  1 + 4 ^ 3 ^ 2
+  4 ^ 3 ^ 2 + 1
   }
 
   @output{2
+  7
+  7
+  49
+  262145
+  262145
   })
 
 (test
+  "function call"
   @input{
-  foo(x){
+  function foo(x){
     x * 2
   }
-  foo(5);
+  foo(5)
   }
 
   @output{10
   })
 
 (test
+  "cond"
   @input{
   var n = 5;
   cond
     n < 10: 'x1,
-    n > 10: 'x2;
+    n > 10: 'x2
   }
 
   @output{'x1
   })
 
 (test
+  "if"
   @input{
-  if 2 > 1 then
+  if (2 > 1)
     1
   else
     0
@@ -98,9 +114,10 @@
   })
 
 (test
+  "list comprehension"
   @input{
-  [x + 1: x <- [1, 2, 3]];
-  [x + y: x <- [1, 2, 3], y <- [4, 5, 6]]
+  [x + 1: x = [1, 2, 3]];
+  [x + y: x = [1, 2, 3], y = [4, 5, 6]]
   }
 
   @output{'(2 3 4)

@@ -1,8 +1,8 @@
-// mysterx.cxx : COM/ActiveX/DHTML extension for PLT Scheme
+// mysterx.cxx : COM/ActiveX/DHTML extension for Racket
 // Author: Paul Steckler
 
 #ifdef MYSTERX_3M
-// Created by xform.ss:
+// Created by xform.rkt:
 # define i64 /* ??? why does expansion produce i64? */
 # include "xsrc/mysterx3m.cxx"
 #else
@@ -69,6 +69,14 @@ static void GC_BOX_DONE(void *v) {
 # define GC_HANDLER_UNBOX(x) GC_UNBOX(x)
 # define GC_HANDLER_BOX_DONE(x) (scheme_gc_ptr_ok(x))
 #endif
+
+static int is_member(Scheme_Object *a, Scheme_Object *l) {
+  while (!SCHEME_NULLP(l)) {
+    if (scheme_equal(a, SCHEME_CAR(l))) return 1;
+    l = SCHEME_CDR(l);
+  }
+  return 0;
+}
 
 static Scheme_Object *mx_omit_obj_key; /* omitted argument placeholder */
 
@@ -972,6 +980,18 @@ Scheme_Object *mx_set_coclass(int argc, Scheme_Object **argv)
   return scheme_void;
 }
 
+XFORM_NONGCING static int get_wow_flag(int pass)
+{
+#ifdef _WIN64
+  /* Try 64-bit first, but fall back to 32-bit keys */
+# define NUM_WOW_PASSES 2
+  return ((pass == 0) ? KEY_WOW64_64KEY : KEY_WOW64_32KEY);
+#else
+# define NUM_WOW_PASSES 1
+  return 0;
+#endif
+}
+
 Scheme_Object *mx_coclass(int argc, Scheme_Object **argv)
 {
   HRESULT hr;
@@ -986,7 +1006,7 @@ Scheme_Object *mx_coclass(int argc, Scheme_Object **argv)
   BYTE dataBuffer[256];
   DWORD dataBufferSize;
   CLSID clsId, registryClsId;
-  int count;
+  int count, pass;
   Scheme_Object *retval, *v;
 
   v = GUARANTEE_COM_OBJ("coclass", 0);
@@ -997,50 +1017,61 @@ Scheme_Object *mx_coclass(int argc, Scheme_Object **argv)
 
   // use CLSID to rummage through Registry to find coclass
 
-  result = RegOpenKeyEx(HKEY_CLASSES_ROOT, "CLSID", (DWORD)0, KEY_READ, &hkey);
+  for (pass = 0; pass < NUM_WOW_PASSES; pass++) {
+    int wow;
+    wow = get_wow_flag(pass);
+    result = RegOpenKeyEx(HKEY_CLASSES_ROOT, "CLSID", (DWORD)0, 
+                          KEY_READ | wow,
+                          &hkey);
 
-  if (result != ERROR_SUCCESS)
-    scheme_signal_error("Error while searching Windows registry");
+    if (result != ERROR_SUCCESS)
+      scheme_signal_error("Error while searching Windows registry");
 
-  // enumerate subkeys until we find the one we want
-  // really, should call RegQueryInfoKey to find size needed for buffers
-  keyIndex = 0;
-  retval = NULL;
-  while (1) {
-    // get next subkey
-    clsIdBufferSize = sizeof(clsIdBuffer);
-    result = RegEnumKeyEx(hkey, keyIndex++, clsIdBuffer, &clsIdBufferSize,
-                          0, NULL, NULL, &fileTime);
-    if (result == ERROR_NO_MORE_ITEMS) break;
-    if (result != ERROR_SUCCESS)
-      scheme_signal_error("Error enumerating subkeys in Windows registry");
-    if (strlen(clsIdBuffer) != CLSIDLEN) // not a CLSID -- bogus entry
-      continue;
-    count = MultiByteToWideChar(CP_ACP, (DWORD)0,
-                                clsIdBuffer, (unsigned int)strlen(clsIdBuffer),
-                                oleClsIdBuffer, sizeray(oleClsIdBuffer));
-    if (count == 0)
-      scheme_signal_error("Error translating CLSID to Unicode");
-    oleClsIdBuffer[CLSIDLEN] = '\0';
-    hr = CLSIDFromString(oleClsIdBuffer, &registryClsId);
-    if (hr != NOERROR)
-      scheme_signal_error("coclass: Error obtaining coclass CLSID");
-    if (registryClsId != clsId)
-      continue;
-    // open subkey
-    result = RegOpenKeyEx(hkey, clsIdBuffer, (DWORD)0, KEY_READ, &hsubkey);
-    if (result != ERROR_SUCCESS)
-      scheme_signal_error("coclass: Error obtaining coclass value");
-    dataBufferSize = sizeof(dataBuffer);
-    RegQueryValueEx(hsubkey, "", 0, &dataType, dataBuffer, &dataBufferSize);
-    RegCloseKey(hsubkey);
-    if (dataType == REG_SZ) {
-      retval = multiByteToSchemeCharString((char*)dataBuffer);
-      break;
+    // enumerate subkeys until we find the one we want
+    // really, should call RegQueryInfoKey to find size needed for buffers
+    keyIndex = 0;
+    retval = NULL;
+    while (1) {
+      // get next subkey
+      clsIdBufferSize = sizeof(clsIdBuffer);
+      result = RegEnumKeyEx(hkey, keyIndex++, clsIdBuffer, &clsIdBufferSize,
+                            0, NULL, NULL, &fileTime);
+      if (result == ERROR_NO_MORE_ITEMS) break;
+      if (result != ERROR_SUCCESS)
+        scheme_signal_error("Error enumerating subkeys in Windows registry");
+      if (strlen(clsIdBuffer) != CLSIDLEN) // not a CLSID -- bogus entry
+        continue;
+      count = MultiByteToWideChar(CP_ACP, (DWORD)0,
+                                  clsIdBuffer, (unsigned int)strlen(clsIdBuffer),
+                                  oleClsIdBuffer, sizeray(oleClsIdBuffer));
+      if (count == 0)
+        scheme_signal_error("Error translating CLSID to Unicode");
+      oleClsIdBuffer[CLSIDLEN] = '\0';
+      hr = CLSIDFromString(oleClsIdBuffer, &registryClsId);
+      if (hr != NOERROR)
+        scheme_signal_error("coclass: Error obtaining coclass CLSID");
+      if (registryClsId != clsId)
+        continue;
+      // open subkey
+      result = RegOpenKeyEx(hkey, clsIdBuffer, (DWORD)0, 
+                            KEY_READ | wow,
+                            &hsubkey);
+      if (result != ERROR_SUCCESS)
+        scheme_signal_error("coclass: Error obtaining coclass value");
+      dataBufferSize = sizeof(dataBuffer);
+      RegQueryValueEx(hsubkey, "", 0, &dataType, dataBuffer, &dataBufferSize);
+      RegCloseKey(hsubkey);
+      if (dataType == REG_SZ) {
+        retval = multiByteToSchemeCharString((char*)dataBuffer);
+        break;
+      }
     }
-  }
 
-  RegCloseKey(hkey);
+    RegCloseKey(hkey);
+
+    if (retval)
+      break;
+  }
 
   if (retval == NULL)
     scheme_signal_error("coclass: object's coclass not found in Registry");
@@ -2630,7 +2661,7 @@ BOOL schemeValueFitsVarType(Scheme_Object *val, VARTYPE vt)
     return MX_DATEP(val);
 
   case VT_BOOL :
-    return TRUE; // ain't Scheme great
+    return TRUE; // ain't Racket great
 
   case VT_ERROR :
     return MX_SCODEP(val);
@@ -2756,7 +2787,7 @@ VARTYPE schemeValueToVarType(Scheme_Object *obj)
   case scheme_symbol_type :
   case scheme_char_string_type :
   case scheme_byte_string_type : return VT_BSTR;
-  case scheme_vector_type : return VT_ARRAY; // may need to specify elt type
+  case scheme_vector_type : return VT_ARRAY | getSchemeVectorType(obj); // may need to specify elt type
   }
 
   scheme_signal_error("Unable to coerce value to VARIANT");
@@ -2863,7 +2894,7 @@ void marshalSchemeValueToVariant(Scheme_Object *val, VARIANTARG *pVariantArg)
   }
 
   else
-    scheme_signal_error("Unable to inject Scheme value %V into VARIANT", val);
+    scheme_signal_error("Unable to inject Racket value %V into VARIANT", val);
 
   return;
 }
@@ -2877,12 +2908,12 @@ void marshalSchemeValue(Scheme_Object *val, VARIANTARG *pVariantArg)
     VARTYPE vt;
     sa = schemeVectorToSafeArray(val, &vt);
     pVariantArg->parray = sa;
-    if (pVariantArg->vt != vt) {
+    if (pVariantArg->vt != (VT_ARRAY | vt)) {
       char buff[256];
       sprintf(buff, "Variant argument type 0x%x doesn't agree with array type 0x%x", pVariantArg->vt, vt);
       scheme_signal_error(buff);
     }
-  }
+  } else {
 
   switch (pVariantArg->vt) {
 
@@ -3086,9 +3117,9 @@ void marshalSchemeValue(Scheme_Object *val, VARIANTARG *pVariantArg)
     {
       VARTYPE vt;
       pVariantArg->pvarVal = (VARIANTARG *)allocParamMemory(sizeof(VARIANTARG));
-      vt = schemeValueToVarType(val);
+      vt = schemeValueToVarType(SCHEME_BOX_VAL(val));
       pVariantArg->pvarVal->vt = vt;
-      marshalSchemeValue(val, pVariantArg->pvarVal);
+      marshalSchemeValue(SCHEME_BOX_VAL(val), pVariantArg->pvarVal);
     }
     break;
 
@@ -3110,10 +3141,11 @@ void marshalSchemeValue(Scheme_Object *val, VARIANTARG *pVariantArg)
     break;
 
   default :
-    sprintf(errBuff, "Unable to marshal Scheme value into VARIANT: 0x%X",
+    sprintf(errBuff, "Unable to marshal Racket value into VARIANT: 0x%X",
             pVariantArg->vt);
     scheme_signal_error(errBuff);
   }
+}
 }
 
 Scheme_Object *variantToSchemeObject(VARIANTARG *pVariantArg)
@@ -3191,7 +3223,7 @@ Scheme_Object *variantToSchemeObject(VARIANTARG *pVariantArg)
     return mx_make_iunknown(pVariantArg->punkVal);
 
   default :
-    sprintf(errBuff, "Can't make Scheme value from VARIANT 0x%X",
+    sprintf(errBuff, "Can't make Racket value from VARIANT 0x%X",
             pVariantArg->vt);
     scheme_signal_error(errBuff);
 
@@ -3202,7 +3234,7 @@ Scheme_Object *variantToSchemeObject(VARIANTARG *pVariantArg)
 
 // different than the above function.
 // *here* we're coercing VARIANTARG's to be arguments to
-// Scheme procedures; *there*, we're coercing a VARIANT
+// Racket procedures; *there*, we're coercing a VARIANT
 // return value to be the value of a method call, and
 // VARIANT's, unlike VARIANTARG's, cannot have VT_BYREF bit
 
@@ -3333,7 +3365,7 @@ Scheme_Object *variantArgToSchemeObject(VARIANTARG *pVariantArg) {
     return scheme_box(variantArgToSchemeObject(pVariantArg->pvarVal));
 
   default :
-    wsprintf(errBuff, "Can't make Scheme value from VARIANT 0x%X",
+    wsprintf(errBuff, "Can't make Racket value from VARIANT 0x%X",
              pVariantArg->vt);
     scheme_signal_error(errBuff);
   }
@@ -3427,7 +3459,7 @@ void unmarshalArgSchemeObject(Scheme_Object *obj,VARIANTARG *pVariantArg) {
 
   case VT_BSTR :
 
-    // string passed to Scheme can be updated in-place
+    // string passed to Racket can be updated in-place
 
     BSTR bstr;
 
@@ -3700,6 +3732,8 @@ void unmarshalVariant(Scheme_Object *val, VARIANTARG *pVariantArg)
     break;
 
   case VT_VARIANT | VT_BYREF :
+    v = variantToSchemeObject(pVariantArg->pvarVal);
+    SCHEME_BOX_VAL(val) = v;
     free(pVariantArg->pvarVal);
     break;
 
@@ -3725,7 +3759,7 @@ void unmarshalVariant(Scheme_Object *val, VARIANTARG *pVariantArg)
 }
 
 // Build the DISPPARAMS by filling out the fields
-// according to the Scheme type of object.
+// according to the Racket type of object.
 // No optional or named args, no type checking.
 short int buildMethodArgumentsUsingDefaults(INVOKEKIND invKind,
                                             int argc, Scheme_Object **argv,
@@ -3774,7 +3808,7 @@ short int buildMethodArgumentsUsingDefaults(INVOKEKIND invKind,
     methodArguments->rgvarg = va;
   }
 
-  // marshal Scheme argument list into COM argument list
+  // marshal Racket argument list into COM argument list
   // arguments are in reverse order in rgvarg
 
   for (i = 0, j = numParamsPassed - 1, k = 2; i < argc - 2; i++, j--, k++) {
@@ -3955,7 +3989,7 @@ short int buildMethodArgumentsUsingFuncDesc(FUNCDESC *pFuncDesc,
     methodArguments->rgvarg = va;
   }
 
-  // marshal Scheme argument list into COM argument list
+  // marshal Racket argument list into COM argument list
   // arguments are in reverse order in rgvarg
 
   for (i = 0, j = numParamsPassed - 1, k = 2; i < argc - 2; i++, j--, k++) {
@@ -4069,7 +4103,7 @@ short int buildMethodArgumentsUsingVarDesc(VARDESC *pVarDesc,
     methodArguments->rgvarg = va;
   }
 
-  // marshal Scheme argument list into COM argument list
+  // marshal Racket argument list into COM argument list
 
   for (i = 0, j = numParamsPassed - 1, k = 2; i < numParamsPassed; i++, j--, k++) {
 
@@ -4341,7 +4375,6 @@ static Scheme_Object *mx_make_call(int argc, Scheme_Object **argv,
   }
 
   // check arity, types of method arguments
-
   pTypeDesc = getMethodType((MX_COM_Object *)argv[0], name, invKind, false);
 
 #ifndef _WIN64
@@ -4505,78 +4538,89 @@ Scheme_Object *mx_all_clsid(int argc, Scheme_Object **argv, char **attributes)
   DWORD dataBufferSize;
   BOOL loopFlag;
   char **p;
+  int pass;
 
   retval = scheme_null;
+  
+  for (pass = 0; pass < NUM_WOW_PASSES; pass++) {
+    int wow;
+    wow = get_wow_flag(pass);
+    result = RegOpenKeyEx(HKEY_CLASSES_ROOT, "CLSID", (DWORD)0, 
+                          KEY_READ | wow,
+                          &hkey);
 
-  result = RegOpenKeyEx(HKEY_CLASSES_ROOT, "CLSID", (DWORD)0, KEY_READ, &hkey);
+    if (result != ERROR_SUCCESS) return retval;
 
-  if (result != ERROR_SUCCESS) return retval;
+    // enumerate subkeys until we find the one we want
 
-  // enumerate subkeys until we find the one we want
+    keyIndex = 0;
 
-  keyIndex = 0;
+    while (1) {
 
-  while (1) {
+      // get next subkey
+      clsidBufferSize = sizeray(clsidBuffer);
+      result = RegEnumKeyEx(hkey, keyIndex++, clsidBuffer, &clsidBufferSize,
+                            0, NULL, NULL, &fileTime);
+      if (result == ERROR_NO_MORE_ITEMS)
+        break;
 
-    // get next subkey
-    clsidBufferSize = sizeray(clsidBuffer);
-    result = RegEnumKeyEx(hkey, keyIndex++, clsidBuffer, &clsidBufferSize,
-                          0, NULL, NULL, &fileTime);
-    if (result == ERROR_NO_MORE_ITEMS)
-      break;
+      if (strlen(clsidBuffer) != CLSIDLEN) // not a CLSID -- bogus entry
+        continue;
 
-    if (strlen(clsidBuffer) != CLSIDLEN) // not a CLSID -- bogus entry
-      continue;
+      // open subkey
+      result = RegOpenKeyEx(hkey, clsidBuffer, (DWORD)0, 
+                            KEY_READ | wow,
+                            &hsubkey);
 
-    // open subkey
-    result = RegOpenKeyEx(hkey, clsidBuffer, (DWORD)0, KEY_READ, &hsubkey);
+      if (result != ERROR_SUCCESS)
+        scheme_signal_error("Error while searching Windows registry");
 
-    if (result != ERROR_SUCCESS)
-      scheme_signal_error("Error while searching Windows registry");
+      dataBufferSize = sizeof(dataBuffer);
 
-    dataBufferSize = sizeof(dataBuffer);
+      RegQueryValueEx(hsubkey, "", 0, &dataType, dataBuffer, &dataBufferSize);
 
-    RegQueryValueEx(hsubkey, "", 0, &dataType, dataBuffer, &dataBufferSize);
+      if (dataType == REG_SZ) {
+        int subkeyIndex;
+        TCHAR subkeyBuffer[256];
+        DWORD subkeyBufferSize;
 
-    if (dataType == REG_SZ) {
-      int subkeyIndex;
-      TCHAR subkeyBuffer[256];
-      DWORD subkeyBufferSize;
+        subkeyIndex = 0;
 
-      subkeyIndex = 0;
+        loopFlag = TRUE;
 
-      loopFlag = TRUE;
+        while (loopFlag) {
 
-      while (loopFlag) {
+          subkeyBufferSize = sizeray(subkeyBuffer);
 
-        subkeyBufferSize = sizeray(subkeyBuffer);
+          result = RegEnumKeyEx(hsubkey, subkeyIndex++,
+                                subkeyBuffer,
+                                &subkeyBufferSize,
+                                0, NULL, NULL,
+                                &fileTime);
 
-        result = RegEnumKeyEx(hsubkey, subkeyIndex++,
-                              subkeyBuffer,
-                              &subkeyBufferSize,
-                              0, NULL, NULL,
-                              &fileTime);
+          if (result == ERROR_NO_MORE_ITEMS) break;
 
-        if (result == ERROR_NO_MORE_ITEMS) break;
+          p = attributes;
 
-        p = attributes;
-
-        while (*p) {
-          if (stricmp(subkeyBuffer, *p) == 0) {
-            retval = scheme_make_pair(multiByteToSchemeCharString((char *)dataBuffer),
-                                      retval);
-            loopFlag = FALSE;
-            break; // *p loop
+          while (*p) {
+            if (stricmp(subkeyBuffer, *p) == 0) {
+              Scheme_Object *str;
+              str = multiByteToSchemeCharString((char *)dataBuffer);
+              if (!is_member(str, retval))
+                retval = scheme_make_pair(str, retval);
+              loopFlag = FALSE;
+              break; // *p loop
+            }
+            p = p XFORM_OK_PLUS 1;
           }
-          p = p XFORM_OK_PLUS 1;
         }
       }
+
+      RegCloseKey(hsubkey);
     }
 
-    RegCloseKey(hsubkey);
+    RegCloseKey(hkey);
   }
-
-  RegCloseKey(hkey);
 
   return retval;
 }
@@ -4770,7 +4814,7 @@ Scheme_Object *mx_elements_with_tag(int argc, Scheme_Object **argv)
   return retval;
 }
 
-CLSID getCLSIDFromCoClass(LPCTSTR name)
+CLSID getCLSIDFromCoClassLoc(LPCTSTR name, REGSAM loc)
 {
   HKEY hkey, hsubkey;
   LONG result;
@@ -4792,7 +4836,7 @@ CLSID getCLSIDFromCoClass(LPCTSTR name)
   clsId = emptyClsId;
 
   // get HKEY to Interfaces listing in Registry
-  result = RegOpenKeyEx(HKEY_CLASSES_ROOT, "CLSID", (DWORD)0, KEY_READ, &hkey);
+  result = RegOpenKeyEx(HKEY_CLASSES_ROOT, "CLSID", (DWORD)0, KEY_READ | loc, &hkey);
 
   if (result != ERROR_SUCCESS)
     scheme_signal_error("Error while searching Windows registry");
@@ -4824,7 +4868,7 @@ CLSID getCLSIDFromCoClass(LPCTSTR name)
 
     // open subkey
 
-    result = RegOpenKeyEx(hkey, clsIdBuffer, (DWORD)0, KEY_READ, &hsubkey);
+    result = RegOpenKeyEx(hkey, clsIdBuffer, (DWORD)0, KEY_READ | loc, &hsubkey);
 
     if (result != ERROR_SUCCESS) return clsId;
 
@@ -4885,7 +4929,21 @@ CLSID getCLSIDFromCoClass(LPCTSTR name)
 
   RegCloseKey(hkey);
 
-  if (isEmptyClsId(clsId)) scheme_signal_error("Coclass %s not found", name);
+  return clsId;
+}
+
+CLSID getCLSIDFromCoClass(LPCTSTR name)
+{
+  CLSID clsId;
+  int pass;
+
+  for (pass = 0; pass < NUM_WOW_PASSES; pass++) {
+    clsId = getCLSIDFromCoClassLoc(name, get_wow_flag(pass));
+    if (!isEmptyClsId(clsId)) break;
+  }
+
+  if (isEmptyClsId(clsId)) 
+    scheme_signal_error("Coclass %s not found", name);
 
   return clsId;
 }
@@ -5342,7 +5400,7 @@ Scheme_Object *scheme_reload(Scheme_Env *env)
 
   if (0 && isatty(fileno(stdin))) {
     fprintf(stderr,
-            "MysterX extension for PLT Scheme, "
+            "MysterX extension for Racket, "
             "Copyright (c) 1999-2003 PLT (Paul Steckler)\n");
   }
 

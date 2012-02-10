@@ -157,13 +157,12 @@ This produces an ACK message
            void)
    
    (mktest "(lambda ())"
-           
            ("{stop-22x22.png} lambda: bad syntax in: (lambda ())"
             "{stop-22x22.png} lambda: bad syntax in: (lambda ())"
             "{stop-22x22.png} repl-test-tmp3.rkt:1:0: lambda: bad syntax in: (lambda ())"
             "{stop-22x22.png} lambda: bad syntax in: (lambda ())"
-            "{stop-multi.png} {stop-22x22.png} lambda: bad syntax in: (lambda ())"
-            "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:0: lambda: bad syntax in: (lambda ())")
+            "{stop-22x22.png} lambda: bad syntax in: (lambda ())"
+            "{stop-22x22.png} repl-test-tmp3.rkt:1:0: lambda: bad syntax in: (lambda ())")
            'definitions
            #f
            void
@@ -171,13 +170,12 @@ This produces an ACK message
    
    ;; make sure only a single syntax error occurs when in nested begin situation
    (mktest "(begin (lambda ()) (lambda ()))"
-           
            ("{stop-22x22.png} lambda: bad syntax in: (lambda ())"
             "{stop-22x22.png} lambda: bad syntax in: (lambda ())"
             "{stop-22x22.png} repl-test-tmp3.rkt:1:7: lambda: bad syntax in: (lambda ())"
             "{stop-22x22.png} lambda: bad syntax in: (lambda ())"
-            "{stop-multi.png} {stop-22x22.png} lambda: bad syntax in: (lambda ())"
-            "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:7: lambda: bad syntax in: (lambda ())")
+            "{stop-22x22.png} lambda: bad syntax in: (lambda ())"
+            "{stop-22x22.png} repl-test-tmp3.rkt:1:7: lambda: bad syntax in: (lambda ())")
            'definitions
            #f
            void
@@ -246,7 +244,6 @@ This produces an ACK message
            void)
    
    (mktest "(parameterize ([print-struct #t])(define-struct s (x) (make-inspector))(printf \"~s\\n\" (make-s 1)))"
-           
            ("#(struct:s 1)"
             "#(struct:s 1)"
             "#(struct:s 1)"
@@ -260,10 +257,9 @@ This produces an ACK message
    
    ;; top-level semantics test
    (mktest "(define (f) (+ 1 1)) (define + -) (f)"
-           
            ("define-values: cannot change constant variable: +"
-            "define-values: cannot change constant variable: +"
-            "define-values: cannot change constant variable: +"
+            #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: define-values: cannot change constant variable: \\+"
+            #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: define-values: cannot change constant variable: \\+"
             "define-values: cannot change constant variable: +"
             #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: define-values: cannot change constant variable: \\+"
             #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: define-values: cannot change constant variable: \\+")
@@ -273,7 +269,6 @@ This produces an ACK message
            void)
    
    (mktest "(begin (define-struct a ()) (define-struct (b a) ()))"
-           
            (""
             ""
             ""
@@ -321,8 +316,8 @@ This produces an ACK message
             "{stop-22x22.png} compile: bad syntax; literal data is not allowed, because no #%datum syntax transformer is bound in: 1"
             "{stop-22x22.png} repl-test-tmp3.rkt:1:43: compile: bad syntax; literal data is not allowed, because no #%datum syntax transformer is bound in: 1"
             "{stop-22x22.png} compile: bad syntax; literal data is not allowed, because no #%datum syntax transformer is bound in: 1"
-            "{stop-multi.png} {stop-22x22.png} compile: bad syntax; literal data is not allowed, because no #%datum syntax transformer is bound in: 1"
-            "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:43: compile: bad syntax; literal data is not allowed, because no #%datum syntax transformer is bound in: 1")
+            "{stop-22x22.png} compile: bad syntax; literal data is not allowed, because no #%datum syntax transformer is bound in: 1"
+            "{stop-22x22.png} repl-test-tmp3.rkt:1:43: compile: bad syntax; literal data is not allowed, because no #%datum syntax transformer is bound in: 1")
            'definitions
            #f
            void
@@ -385,13 +380,12 @@ This produces an ACK message
            void)
    
    (mktest "    (eval '(lambda ()))"
-           
-           ("{stop-multi.png} lambda: bad syntax in: (lambda ())"
-            "{stop-multi.png} lambda: bad syntax in: (lambda ())"
-            "{stop-multi.png} lambda: bad syntax in: (lambda ())"
+           ("lambda: bad syntax in: (lambda ())"
             "lambda: bad syntax in: (lambda ())"
-            "{stop-multi.png} lambda: bad syntax in: (lambda ())"
-            "{stop-multi.png} lambda: bad syntax in: (lambda ())")
+            "lambda: bad syntax in: (lambda ())"
+            "lambda: bad syntax in: (lambda ())"
+            "lambda: bad syntax in: (lambda ())"
+            "lambda: bad syntax in: (lambda ())")
            'interactions
            #f
            void
@@ -452,12 +446,12 @@ This produces an ACK message
    ; printer setup test
    (mktest "(expt 3 (void))"
            
-           ("{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given #<void>"
-            "{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given #<void>"
-            "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:0: expt: expected argument of type <number>; given #<void>"
-            "expt: expected argument of type <number>; given #<void>"
-            #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: expt: expected argument of type <number>; given #<void>"
-            #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: expt: expected argument of type <number>; given #<void>")
+           ("{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given: #<void>"
+            "{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given: #<void>"
+            "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:0: expt: expected argument of type <number>; given: #<void>"
+            "expt: expected argument of type <number>; given: #<void>"
+            #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: expt: expected argument of type <number>; given: #<void>"
+            #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: expt: expected argument of type <number>; given: #<void>")
            'definitions
            #f
            void
@@ -494,8 +488,8 @@ This produces an ACK message
             "{stop-22x22.png} lambda: bad syntax in: (lambda ())"
             "{stop-22x22.png} repl-test-tmp3.rkt:1:4: lambda: bad syntax in: (lambda ())"
             "1\n2\n{stop-22x22.png} lambda: bad syntax in: (lambda ())"
-            "{stop-multi.png} {stop-22x22.png} lambda: bad syntax in: (lambda ())"
-            "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:4: lambda: bad syntax in: (lambda ())")
+            "{stop-22x22.png} lambda: bad syntax in: (lambda ())"
+            "{stop-22x22.png} repl-test-tmp3.rkt:1:4: lambda: bad syntax in: (lambda ())")
            'definitions
            #f
            void
@@ -542,9 +536,9 @@ This produces an ACK message
            ("{stop-22x22.png} cond: expected a clause with a question and an answer, but found a clause with 4 parts in:\n  1\n  2\n  3\n  4"
             "{stop-22x22.png} cond: expected a clause with a question and an answer, but found a clause with 4 parts in:\n  1\n  2\n  3\n  4"
             "{stop-22x22.png} repl-test-tmp3.rkt:2:7: cond: expected a clause with a question and an answer, but found a clause with 4 parts in:\n  1\n  2\n  3\n  4"
-            "{stop-multi.png} {stop-22x22.png} cond: expected a clause with a question and an answer, but found a clause with 4 parts in:\n  1\n  2\n  3\n  4"
-            "{stop-multi.png} {stop-22x22.png} cond: expected a clause with a question and an answer, but found a clause with 4 parts in:\n  1\n  2\n  3\n  4"
-            "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:2:7: cond: expected a clause with a question and an answer, but found a clause with 4 parts in:\n  1\n  2\n  3\n  4")
+            "{stop-22x22.png} cond: expected a clause with a question and an answer, but found a clause with 4 parts in:\n  1\n  2\n  3\n  4"
+            "{stop-22x22.png} cond: expected a clause with a question and an answer, but found a clause with 4 parts in:\n  1\n  2\n  3\n  4"
+            "{stop-22x22.png} repl-test-tmp3.rkt:2:7: cond: expected a clause with a question and an answer, but found a clause with 4 parts in:\n  1\n  2\n  3\n  4")
            'definitions
            #f
            void
@@ -554,12 +548,12 @@ This produces an ACK message
    (mktest
     "(load \"repl-test-tmp2.rkt\") (define (g) (+ 1 (expt 3 #f))) (f g)"
     
-    ("{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given #f"
-     "{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given #f"
-     "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:45: expt: expected argument of type <number>; given #f"
-     "{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given #f"
-     "{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given #f"
-     "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:28: expt: expected argument of type <number>; given #f")
+    ("{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given: #f"
+     "{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given: #f"
+     "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:45: expt: expected argument of type <number>; given: #f"
+     "{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given: #f"
+     "{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given: #f"
+     "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:28: expt: expected argument of type <number>; given: #f")
     'definitions
     #f
     (λ ()
@@ -577,8 +571,8 @@ This produces an ACK message
             "{stop-22x22.png} if: bad syntax in: if"
             "{stop-22x22.png} repl-test-tmp3.rkt:2:0: if: bad syntax in: if"
             "{stop-22x22.png} if: bad syntax in: if"
-            "{stop-multi.png} {stop-22x22.png} if: bad syntax in: if"
-            "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:2:0: if: bad syntax in: if")
+            "{stop-22x22.png} if: bad syntax in: if"
+            "{stop-22x22.png} repl-test-tmp3.rkt:2:0: if: bad syntax in: if")
            'definitions
            #f
            void
@@ -590,8 +584,8 @@ This produces an ACK message
             "{stop-22x22.png} compile: unbound identifier (and no #%app syntax transformer is bound) in: #%top-interaction"
             "{stop-22x22.png} repl-test-tmp3.rkt:2:0: compile: unbound identifier (and no #%app syntax transformer is bound) in: #%top-interaction"
             "{stop-22x22.png} compile: unbound identifier (and no #%app syntax transformer is bound) in: #%top-interaction"
-            "{stop-multi.png} {stop-22x22.png} compile: unbound identifier (and no #%app syntax transformer is bound) in: #%top-interaction"
-            "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:2:0: compile: unbound identifier (and no #%app syntax transformer is bound) in: #%top-interaction")
+            "{stop-22x22.png} compile: unbound identifier (and no #%app syntax transformer is bound) in: #%top-interaction"
+            "{stop-22x22.png} repl-test-tmp3.rkt:2:0: compile: unbound identifier (and no #%app syntax transformer is bound) in: #%top-interaction")
            'definitions
            #f
            void
@@ -615,12 +609,12 @@ This produces an ACK message
    (mktest
     "(let ([old (error-escape-handler)])\n(+ (let/ec k\n(dynamic-wind\n(lambda () (error-escape-handler (lambda () (k 5))))\n(lambda () (expt 3 #f))\n(lambda () (error-escape-handler old))))\n10))"
     
-    ("{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given #f\n15"
-     "{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given #f\n15"
-     "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:5:19: expt: expected argument of type <number>; given #f\n15"
-     "expt: expected argument of type <number>; given #f\n15"
-     #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: expt: expected argument of type <number>; given #f\n15"
-     #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: expt: expected argument of type <number>; given #f\n15")
+    ("{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given: #f\n15"
+     "{stop-multi.png} {stop-22x22.png} expt: expected argument of type <number>; given: #f\n15"
+     "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:5:19: expt: expected argument of type <number>; given: #f\n15"
+     "expt: expected argument of type <number>; given: #f\n15"
+     #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: expt: expected argument of type <number>; given: #f\n15"
+     #rx"{stop-multi.png} {stop-22x22.png} .*rkt:[0-9]+:[0-9]+: expt: expected argument of type <number>; given: #f\n15")
     'definitions
     #f
     void
@@ -714,12 +708,12 @@ This produces an ACK message
     ;; comes and messes up the source location for the error.
     "(define s (make-semaphore 0))\n(queue-callback\n(lambda ()\n(dynamic-wind\nvoid\n(lambda () (expt 3 #f))\n(lambda () (semaphore-post s)))))\n(begin (yield s) (void))"
     
-    (#rx"expt: expected argument of type <number>; given #f"
-     #rx"expt: expected argument of type <number>; given #f"
-     #rx"expt: expected argument of type <number>; given #f"
-     #rx"expt: expected argument of type <number>; given #f"
-     #rx"expt: expected argument of type <number>; given #f"
-     #rx"expt: expected argument of type <number>; given #f")
+    (#rx"expt: expected argument of type <number>; given: #f"
+     #rx"expt: expected argument of type <number>; given: #f"
+     #rx"expt: expected argument of type <number>; given: #f"
+     #rx"expt: expected argument of type <number>; given: #f"
+     #rx"expt: expected argument of type <number>; given: #f"
+     #rx"expt: expected argument of type <number>; given: #f")
     'definitions
     #f
     void
@@ -869,8 +863,8 @@ This produces an ACK message
             "{stop-22x22.png} λ: bad syntax in: (λ ())"
             "{stop-22x22.png} repl-test-tmp3.rkt:1:0: λ: bad syntax in: (λ ())"
             "{stop-22x22.png} λ: bad syntax in: (λ ())"
-            "{stop-multi.png} {stop-22x22.png} λ: bad syntax in: (λ ())"
-            "{stop-multi.png} {stop-22x22.png} repl-test-tmp3.rkt:1:0: λ: bad syntax in: (λ ())")
+            "{stop-22x22.png} λ: bad syntax in: (λ ())"
+            "{stop-22x22.png} repl-test-tmp3.rkt:1:0: λ: bad syntax in: (λ ())")
            'definitions
            #f
            void
@@ -926,12 +920,12 @@ This produces an ACK message
                (namespace-set-variable-value! 'd (disk 3)))
             'd)
            
-           ("#<pict>"
-            "#<pict>"
-            "#<pict>"
-            "#<pict>"
-            "#<pict>"
-            "#<pict>")
+           ("{image}"
+            "{image}"
+            "{image}"
+            "{image}"
+            "{image}"
+            "{image}")
            'interactions
            #f
            void
@@ -998,7 +992,6 @@ This produces an ACK message
      "(with-handlers ((void values)) (eval '(lambda ())))))\n"
      "(lambda ()\n"
      "(display (get-output-string p)))))\n")
-    
     ("x in: (lambda ())"
      "x in: (lambda ())"
      "x in: (lambda ())"
@@ -1304,7 +1297,8 @@ This produces an ACK message
                        (fprintf (current-error-port)
                                 "FAILED load test ~a for ~s\n  expected: ~s\n       got: ~s\n"
                                 short-filename
-                                program load-answer received-load)))))])
+                                program load-answer received-load)
+                       (semaphore-wait (make-semaphore 0))))))])
           (load-test tmp-load-short-filename (make-load-answer in-vector language-cust #f))
           (when (file-exists? tmp-load3-filename)
             (delete-file tmp-load3-filename))

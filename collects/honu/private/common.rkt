@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require honu/core/private/macro2
+(require honu/core/private/syntax
+         honu/core/private/literals
          (for-syntax syntax/parse
                      racket/base
                      honu/core/private/literals
@@ -9,14 +10,20 @@
 (provide sqr)
 (define (sqr x) (* x x))
 
+;; convert a float to an integer
+(provide integer)
+(define (integer x)
+  (inexact->exact (round x)))
+
 (provide honu-cond)
 (define-honu-syntax honu-cond
   (lambda (code context)
     (syntax-parse code #:literal-sets (cruft)
       [(_ (~seq clause:honu-expression colon body:honu-expression (~optional honu-comma)) ...
-          semicolon . rest)
+          . rest)
        (values
-         #'(cond
-             [clause.result body.result] ...)
+         #'(%racket (cond
+                      [clause.result body.result]
+                      ...))
          #'rest
          #t)])))

@@ -78,6 +78,19 @@ and there's no need for you to even know whether or not a particular
 package is installed on your computer or the computers where your code
 will be deployed.
 
+If you want to find all of the latest versions of the
+packages that planet has available, visit
+@centered{@url{http://planet.racket-lang.org/servlets/pkg-info.ss}}
+It returns a list matching the contract
+@racketblock[(listof (list/c string? 
+                             string?
+                             (list/c exact-positive-integer?
+                                     exact-nonnegative-integer?)))]
+Each sublist represents
+the latest version of one of the packages and contains the
+userid, the package name (including ".plt"), and
+the version (major and minor numbers).
+
 @subsection{Shorthand Syntax}
 
 The code snippet above can also be written using a new shorter syntax:
@@ -738,10 +751,10 @@ though it had been downloaded from the PLaneT server with the given
 owner name and major and minor versions. After you run this command,
 you can require your package on your local machine using
 
-@racket[(require (planet <file> (<owner> <.plt file name without path> <maj> <min>)))]
+@racket[(require (planet <file> (<owner> <.plt file name> <maj> <min>)))]
 
 to verify everything works. After you do so, you can use
-@commandline{raco planet remove <owner> <.plt file name without path> <maj> <min>}
+@commandline{raco planet remove <owner> <.plt file name> <maj> <min>}
 to remove the test package from your local cache. (Not removing it is
 safe as long as you use the same name and version numbers the package
 will have on the PLaneT server; otherwise you may experience

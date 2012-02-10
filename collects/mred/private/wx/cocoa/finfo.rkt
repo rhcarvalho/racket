@@ -86,9 +86,9 @@
   (let ([fs (malloc 80)])
     (let ([r (FSPathMakeRef s fs)])
       (unless (zero? r)
-        (error 'file-creator-and-type "could not access file (~a): ~v"
-               r
-               s)))
+        (filesystem-error 'file-creator-and-type "could not access file (~a): ~v"
+                          r
+                          s)))
     fs))
 
 (define (int->str v)
@@ -103,16 +103,15 @@
                (arithmetic-shift (bytes-ref v 2) 8)
                (bytes-ref v 3)))
 
-
 (define (get-info v fs path)
   (let ([r (FSGetCatalogInfo fs
                              kFSCatInfoFinderInfo
                              v
                              #f #f #f)])
     (unless (zero? r)
-      (error 'file-creator-and-type "lookup failed (~a): ~e"
-             r
-             path))))
+      (filesystem-error 'file-creator-and-type "lookup failed (~a): ~e"
+                        r
+                        path))))
 
 (define file-creator-and-type
   (case-lambda
@@ -120,7 +119,7 @@
     (unless (path-string? path)
       (raise-type-error 'file-creator-and-type "path string" path))
     (let ([info (let ([fs (path->fsref path)]
-                      [v (cast (malloc 256) _pointer (_gcable _FSCatalogInfo-pointer))])
+                      [v (cast (malloc 256) _gcpointer (_gcable _FSCatalogInfo-pointer))])
                   (get-info v fs path)
                   (FSCatalogInfo-finderInfo v))])
       (values (int->str (FileInfo-fileCreator info))
@@ -133,7 +132,7 @@
     (unless (and (bytes? type) (= 4 (bytes-length type)))
       (raise-type-error 'file-creator-and-type "bytes string of length 4" type))
     (let ([fs (path->fsref path)]
-          [v (cast (malloc 256) _pointer (_gcable _FSCatalogInfo-pointer))])
+          [v (cast (malloc 256) _gcpointer (_gcable _FSCatalogInfo-pointer))])
       (get-info v fs path)
       (let ([info (FSCatalogInfo-finderInfo v)])
         (set-FileInfo-fileCreator! info (str->int creator))
@@ -142,7 +141,14 @@
                                  kFSCatInfoFinderInfo
                                  v)])
         (unless (zero? r)
-          (error 'file-creator-and-type "change failed (~a): ~e"
-                 r
-                 path))))
+          (filesystem-error 'file-creator-and-type "change failed (~a): ~e"
+                            r
+                            path))))
     (void)]))
+
+
+(define (filesystem-error sym fmt . args)
+  (raise (exn:fail:filesystem
+          (string-append (format "~a: " sym)
+                         (apply format fmt args))
+          (current-continuation-marks))))

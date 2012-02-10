@@ -64,7 +64,7 @@
       (let* ([s (read-bytes 5000 p)]
 	     [s2 (read-bytes (if (bytes? s) (bytes-length s) 100) in)])
 	(unless (equal? s s2)
-	  (error "fast check failed"))
+	  (error 'check-file/fast "failed: ~s vs. ~s" s s2))
 	(unless (eof-object? s)
 	  (loop))))
     (close-input-port p)))
@@ -123,15 +123,12 @@
         (flush-output (cadr p))
 	(thread-wait t)
 	(fprintf (cadr p) "(begin ((copy-stream r w2)) (exit))\n"))
-      (fprintf (cadr p) "(begin (flush-output) ((copy-stream (current-input-port) (current-output-port))) (exit))\n"))
+      (fprintf (cadr p) "(begin (display \"!READY!\") (flush-output) ((copy-stream (current-input-port) (current-output-port))) (exit))"))
   (flush-output (cadr p))
 
   (unless tcp?
     ;; Flush initial output from other process:
-    (let loop ()
-      (sleep 0.3)
-      (unless (zero? (read-bytes-avail!* s (car p)))
-        (loop))))
+    (regexp-match #rx"!READY!" (car p)))
 
   (if tcp?
       (values r w r2 w2)

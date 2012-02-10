@@ -189,11 +189,11 @@ standard library collection directory (see @secref["collects"]).  In
 this case, @racket[program] is the name used to start Racket and
 @racket[related] is @racket["collects"].  The @racket[related-sub]
 argument is used because, on @|AllUnix|, @racket[program-sub] may
-involve to a sequence of soft links; in this case,
+involve a sequence of soft links; in this case,
 @racket[related-sub] determines which link in the chain is relevant.
 
 If @racket[related-sub] is not @racket[#f], then when
-@racket[find-executable-path] does not finds a @racket[program-sub]
+@racket[find-executable-path] does not find a @racket[program-sub]
 that is a link to another file path, the search can continue with the
 destination of the link. Further links are inspected until
 @racket[related-sub] is found or the end of the chain of links is
@@ -367,7 +367,8 @@ Creates the file @racket[dest] as a copy of @racket[src], if
 and @racket[exists-ok?] is @racket[#f], the copy fails with
 @exnraise[exn:fail:filesystem:exists?]; otherwise, if @racket[dest]
 exists, its content is replaced with the content of @racket[src]. File
-permissions are transferred from @racket[src] to @racket[dest]. If
+permissions are transferred from @racket[src] to @racket[dest]; on Windows,
+the modification time of @racket[src] is also transferred to @racket[dest]. If
 @racket[src] refers to a link, the target of the link is copied,
 rather than the link itself; if @racket[dest] refers to a link and
 @racket[exists-ok?] is true, the target of the link is updated.}

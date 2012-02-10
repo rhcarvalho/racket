@@ -10,26 +10,30 @@
   (begin
    (define-syntax name (lambda (stx)
                          (raise-syntax-error 'name
-                                             "this is a literal and cannot be used outside a macro")))
+                                             "this is a literal and cannot be used outside a macro" (syntax->datum stx))))
    ...))
 
 (define-literal honu-return)
 (define-literal semicolon)
-(define-literal honu-+ honu-* honu-/ honu-- honu-|| honu-%
-                honu-= honu-+= honu--= honu-*= honu-/= honu-%=
+(define-literal honu-|| honu-%
+                honu-%=
                 honu-&= honu-^= honu-\|= honu-<<= honu->>= honu->>>=
-                honu->> honu-<< honu->>> honu-< honu-> honu-<= honu->=
-                honu-!= honu-==
+                honu->> honu-<< honu->>> 
+                honu-!=
+                ;; honu-equal
                 honu-<-
                 honu-literal
                 honu-then
                 honu-? honu-: honu-comma honu-. #%braces #%brackets #%parens colon
-                honu-and
                 ellipses-comma ellipses-comma* ellipses-repeat
                 honu-in
+                honu-where
                 honu-for-syntax
                 honu-for-template
-                honu-prefix)
+                honu-prefix
+                ;; FIXME: in-lines should probably not be here
+                honu-in-lines
+                %racket)
 
 (define-syntax-rule (define-literal+set set literal ...)
                     (begin
@@ -37,4 +41,6 @@
                       (begin-for-syntax
                         (define-literal-set set (literal ...)))))
 
-(define-literal-set cruft (#%parens #%brackets #%braces semicolon colon honu-comma honu-<-))
+(define-literal-set cruft (#%parens #%brackets #%braces
+                           %racket
+                           semicolon colon honu-comma))

@@ -14,8 +14,10 @@ Based on protocol documentation here:
 
          packet?
          (struct-out handshake-packet)
-         (struct-out client-authentication-packet)
-         (struct-out abbrev-client-authentication-packet)
+         (struct-out change-plugin-packet)
+         (struct-out client-auth-packet)
+         (struct-out abbrev-client-auth-packet)
+         (struct-out auth-followup-packet)
          (struct-out command-packet)
          (struct-out command:statement-packet)
          (struct-out command:change-user-packet)
@@ -30,6 +32,8 @@ Based on protocol documentation here:
          (struct-out parameter-packet)
          (struct-out long-data-packet)
          (struct-out execute-packet)
+         (struct-out fetch-packet)
+         (struct-out unknown-packet)
 
          supported-result-typeid?
          parse-field-dvec
@@ -201,17 +205,22 @@ Based on protocol documentation here:
    auth)
   #:transparent)
 
-(define-struct (client-authentication-packet packet)
+(define-struct (client-auth-packet packet)
   (client-flags
    max-packet-length
    charset
    user
    scramble
-   database)
+   database
+   plugin)
   #:transparent)
 
-(define-struct (abbrev-client-authentication-packet packet)
+(define-struct (abbrev-client-auth-packet packet)
   (client-flags)
+  #:transparent)
+
+(define-struct (auth-followup-packet packet)
+  (data)
   #:transparent)
 
 (define-struct (command-packet packet)
@@ -305,6 +314,21 @@ Based on protocol documentation here:
    params)
   #:transparent)
 
+(define-struct (fetch-packet packet)
+  (statement-id
+   count)
+  #:transparent)
+
+(define-struct (change-plugin-packet packet)
+  (plugin
+   data)
+  #:transparent)
+
+(define-struct (unknown-packet packet)
+  (expected
+   contents)
+  #:transparent)
+
 (define (write-packet out p number)
   (let ([o (open-output-bytes)])
     (write-packet* o p)
@@ -316,19 +340,24 @@ Based on protocol documentation here:
 
 (define (write-packet* out p)
   (match p
-    [(struct abbrev-client-authentication-packet (client-flags))
+    [(struct abbrev-client-auth-packet (client-flags))
      (io:write-le-int32 out (encode-server-flags client-flags))]
-    [(struct client-authentication-packet
-             (client-flags max-length charset user scramble database))
+    [(struct client-auth-packet (client-flags max-length charset user scramble database plugin))
      (io:write-le-int32 out (encode-server-flags client-flags))
      (io:write-le-int32 out max-length)
      (io:write-byte out (encode-charset charset))
      (io:write-bytes out (make-bytes 23 0))
      (io:write-null-terminated-string out user)
-     (if scramble
-         (io:write-length-coded-bytes out scramble)
-         (io:write-byte out 0))
-     (io:write-null-terminated-string out database)]
+     (cond [(memq 'secure-connection client-flags)
+            (io:write-length-coded-bytes out (or scramble #""))]
+           [else ;; old-style scramble is *not* length-coded, but \0-terminated
+            (io:write-bytes out (or scramble (bytes 0)))])
+     (when (memq 'connect-with-db client-flags)
+       (io:write-null-terminated-string out database))
+     (when (memq 'plugin-auth client-flags)
+       (io:write-null-terminated-string out plugin))]
+    [(struct auth-followup-packet (data))
+     (io:write-bytes out data)]
     [(struct command-packet (command arg))
      (io:write-byte out (encode-command command))
      (io:write-null-terminated-bytes out (string->bytes/utf-8 arg))]
@@ -356,12 +385,18 @@ Based on protocol documentation here:
        (for-each (lambda (type param)
                    (unless (sql-null? param)
                      (write-binary-datum out type param)))
-                 param-types params))]))
+                 param-types params))]
+    [(struct fetch-packet (statement-id count))
+     (io:write-byte out (encode-command 'statement-fetch))
+     (io:write-le-int32 out statement-id)
+     (io:write-le-int32 out count)]))
 
 (define (parse-packet in expect field-dvecs)
   (let* ([len (io:read-le-int24 in)]
          [num (io:read-byte in)]
-         [inp (subport in len)]
+         ;; [inp (subport in len)]
+         [bs (read-bytes len in)]
+         [inp (open-input-bytes bs)]
          [msg (parse-packet/1 inp expect len field-dvecs)])
     (when (port-has-bytes? inp)
       (error/internal 'parse-packet "bytes left over after parsing ~s; bytes were: ~s" 
@@ -382,17 +417,18 @@ Based on protocol documentation here:
     ((handshake)
      (parse-handshake-packet in len))
     ((auth)
-     (unless (eq? (peek-byte in) #x00)
-       (error/comm 'parse-packet "(expected authentication ok packet)"))
-     (parse-ok-packet in len))
+     (case (peek-byte in)
+       ((#x00) (parse-ok-packet in len))
+       ((#xFE) (parse-change-plugin-packet in len))
+       (else (parse-unknown-packet in len "(expected authentication ok packet)"))))
     ((ok)
-     (unless (eq? (peek-byte in) #x00)
-       (error/comm 'parse-packet "(expected ok packet)"))
-     (parse-ok-packet in len))
+     (case (peek-byte in)
+       ((#x00) (parse-ok-packet in len))
+       (else (parse-unknown-packet in len "(expected ok packet)"))))
     ((result)
-     (if (eq? (peek-byte in) #x00)
-         (parse-ok-packet in len)
-         (parse-result-set-header-packet in len)))
+     (case (peek-byte in)
+       ((#x00) (parse-ok-packet in len))
+       (else (parse-result-set-header-packet in len))))
     ((field)
      (if (and (eq? (peek-byte in) #xFE) (< len 9))
          (parse-eof-packet in len)
@@ -406,7 +442,9 @@ Based on protocol documentation here:
          (parse-eof-packet in len)
          (parse-binary-row-data-packet in len field-dvecs)))
     ((prep-ok)
-     (parse-ok-prepared-statement-packet in len))
+     (case (peek-byte in)
+       ((#x00) (parse-ok-prepared-statement-packet in len))
+       (else (parse-unknown-packet in len "(expected ok for prepared statement packet)"))))
     ((prep-params)
      (if (and (eq? (peek-byte in) #xFE) (< len 9))
          (parse-eof-packet in len)
@@ -415,6 +453,9 @@ Based on protocol documentation here:
      (error/comm 'parse-packet (format "(bad expected packet type: ~s)" expect)))))
 
 ;; Individual parsers
+
+(define (parse-unknown-packet in len expected)
+  (make-unknown-packet expected (io:read-bytes-to-eof in)))
 
 (define (parse-handshake-packet in len)
   (let* ([protocol-version (io:read-byte in)]
@@ -453,7 +494,7 @@ Based on protocol documentation here:
           ;;  - in 5.5.12, a null-terminated auth string
           (cond [(memq 'plugin-auth server-capabilities)
                  (io:read-null-terminated-string in)]
-                [else "mysql_native_password"])])
+                [else #f])]) ;; implicit "mysql_native_password"
     (make-handshake-packet protocol-version
                            server-version
                            thread-id
@@ -475,6 +516,15 @@ Based on protocol documentation here:
                     server-status
                     warning-count
                     (bytes->string/utf-8 message))))
+
+(define (parse-change-plugin-packet in len)
+  (let* ([_ (io:read-byte in)]
+         [plugin (and (port-has-bytes? in)
+                      (io:read-null-terminated-string in))]
+         [data (and (port-has-bytes? in)
+                    (io:read-bytes-to-eof in))])
+    ;; If plugin = #f, then changing to old password plugin.
+    (make-change-plugin-packet plugin data)))
 
 (define (parse-error-packet in len)
   (let* ([_ (io:read-byte in)]
@@ -815,7 +865,9 @@ Based on protocol documentation here:
 
 (define server-status-flags/decoding
   '((#x1     . in-transaction)
-    (#x2     . auto-commit)))
+    (#x2     . auto-commit)
+    (64      . cursor-exists)
+    (128     . last-row-sent)))
 
 (define commands/decoding
   '((#x00 . sleep)

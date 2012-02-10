@@ -310,7 +310,7 @@ please adhere to these guidelines:
  (plt:hd:refresh-downloading... "Завантажити ~a...")
  (plt:hd:refresh-deleting... "Видалити стару версію ~a...")
  (plt:hd:refresh-installing... "Інсталювати нову версію ~a...")
- (plt:hd:refresh-clearing-indicies "Очистити кешовані індекси")
+ (plt:hd:refresh-clearing-indices "Очистити кешовані індекси")
  (plt:hd:refreshing-manuals-finished "Готово.")
  (plt:hd:about-help-desk "Про допомогу")
  (plt:hd:help-desk-about-string
@@ -1252,10 +1252,10 @@ please adhere to these guidelines:
  (stepper-language-level-message "Покрокове виконання не працює для мови \"~a\".")
  (stepper-button-label "Крок")
 
- (stepper-previous-application "|< Програма")
- (stepper-previous "< Крок")
- (stepper-next "Крок >")
- (stepper-next-application "Програма >|")
+ (stepper-previous-application "Програма")
+ (stepper-previous "Крок")
+ (stepper-next "Крок")
+ (stepper-next-application "Програма")
  (stepper-jump "Перейти...") ;; this one is changed.  action?
  (stepper-out-of-steps "Обчислення завершено раніше, ніж досягнуто шуканий крок.")
  (stepper-no-such-step/title "Крок не знайдено")

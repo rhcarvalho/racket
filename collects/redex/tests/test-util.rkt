@@ -1,9 +1,10 @@
 #lang scheme
 
 (require "../private/matcher.rkt"
-         (for-syntax syntax/parse)
+         (for-syntax syntax/parse setup/path-to-relative)
          errortrace/errortrace-lib
          errortrace/errortrace-key
+         setup/path-to-relative
          racket/runtime-path)
 (provide test test-syn-err tests reset-count
          syn-err-test-namespace
@@ -29,9 +30,9 @@
 (define-syntax (test stx)
   (syntax-case stx ()
     [(_ expected got)
-     (with-syntax ([line (syntax-line (syntax got))]
+     (with-syntax ([line (syntax-line stx)]
                    [fn (if (path? (syntax-source (syntax got)))
-                           (path->string (syntax-source (syntax got)))
+                           (path->relative-string/library (syntax-source (syntax got)))
                            "<unknown file>")])
        (syntax/loc stx (test/proc (λ () expected) got line fn)))]))
 
@@ -74,7 +75,8 @@
     [(message named-pieces body)
      (make-error-test (syntax/loc spec (message named-pieces () body)))]
     [(message ([loc-name loc-piece] ...) ([non-loc-name non-loc-piece] ...) body)
-     (values (syntax-source spec)
+     (values (and (path? (syntax-source spec))
+                  (path->relative-string/library (syntax-source spec)))
              (syntax-line spec)
              (syntax-e #'message)
              (map source-location (syntax->list #'(loc-piece ...)))
@@ -83,10 +85,12 @@
                                (syntax-case stx ()
                                  [(_ loc-name ... non-loc-name ...)
                                   #'body]))])
-                 (subst loc-piece ... non-loc-piece ...)))]))
+                 (subst loc-piece ... non-loc-piece ...)
+                 (void)))]))
 
 (define (source-location stx)
-  (list (syntax-source stx) 
+  (list (and (path? (syntax-source stx))
+             (path->relative-string/library (syntax-source stx))) 
         (syntax-line stx) 
         (syntax-column stx) 
         (syntax-position stx)
@@ -141,7 +145,7 @@
                  (matches? got expected))
       (set! failures (+ 1 failures))
       (fprintf (current-error-port)
-               "test/proc: file ~a line ~a:\n     got ~s\nexpected ~s\n\n" 
+               "test: file ~a line ~a:\n     got ~s\nexpected ~s\n\n" 
                filename 
                line
                got

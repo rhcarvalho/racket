@@ -21,7 +21,6 @@
               set-menu-bar-hooks!
               set-fixup-window-locations!
               post-dummy-event
-              call-in-run-loop
 
               try-to-sync-refresh
               sync-cocoa-events)
@@ -31,8 +30,7 @@
  queue-event
  yield)
 
-(import-class NSApplication NSAutoreleasePool NSColor NSProcessInfo NSArray
-              NSRunLoop)
+(import-class NSApplication NSAutoreleasePool NSColor NSProcessInfo NSArray)
 (import-protocol NSApplicationDelegate)
 
 ;; Extreme hackery to hide original arguments from
@@ -77,14 +75,11 @@
       #t]
   [-a _BOOL (application: [_id theApplication] openFile: [_NSString filename])
       (set! got-file? #t)
-      (queue-file-event (string->path filename))]
+      (queue-file-event (string->path filename))
+      (post-dummy-event)]
   [-a _void (applicationDidFinishLaunching: [_id notification])
       (unless got-file?
-        (queue-start-empty-event))
-      (tellv app stop: self)]
-  [-a _void (callbackAndStopLoop)
-      (run-loop-callback)
-      (tellv app stop: self)]
+        (queue-start-empty-event))]
   [-a _BOOL (applicationShouldHandleReopen: [_id app] hasVisibleWindows: [_BOOL has-visible?])
       ;; If we have any visible windows, return #t to do the default thing.
       ;; Otherwise return #f, because we don't want any invisible windows resurrected.
@@ -138,34 +133,7 @@
   (unless (zero? v)
     (log-error (format "error from CGDisplayRegisterReconfigurationCallback: ~a" v))))
 
-;; To make sure that `finishLaunching' is called, call `run'
-;; and have `applicationDidFinishLaunching' quit the run loop.
-;; This seems to work better than calling `finishLaunching'
-;; directly undet 64-bt Lion, where calling just `finishLaunching'
-;; somehow doesn't get the start-up AppleEvents.
-(tellv app run)
-
-;; Use `call-in-run-loop' to run something that needs to be
-;; within `run', such as a modal-dialog run loop. It starts
-;; a `run' with a high-priority callback to run `thunk', and
-;; the run loop is stopped immediately after `thunk' returns.
-(define (call-in-run-loop thunk)
-  (define result #f)
-  (set! run-loop-callback 
-        (lambda ()
-          (set! run-loop-callback  void)
-          (set! result (thunk))))
-  (tellv (tell NSRunLoop currentRunLoop)
-         performSelector: #:type _SEL (selector callbackAndStopLoop)
-         target: app-delegate 
-         argument: #f 
-         order: #:type _NSUInteger 0
-         modes: (tell NSArray 
-                      arrayWithObjects: #:type (_vector i _id) (vector NSDefaultRunLoopMode)
-                      count: #:type _NSUInteger 1))
-  (tellv app run)
-  result)
-(define run-loop-callback void)
+(tellv app finishLaunching)
 
 ;; ------------------------------------------------------------
 ;; Create an event to post when MzScheme has been sleeping but is
@@ -254,6 +222,7 @@
 
 (define kCFSocketReadCallBack 1)
 
+(import-class NSRunLoop)
 (let* ([rl (tell #:type _CFRunLoopRef (tell NSRunLoop currentRunLoop) getCFRunLoop)]
        [cfs (CFSocketCreateWithNative (CFAllocatorGetDefault) ready_sock kCFSocketReadCallBack
                                       socket_callback sock-context)]
@@ -343,6 +312,8 @@
                                (set! events-suspended? #f)
                                (custodian-shutdown-all c)))))))
       (set! was-menu-bar #f)))
+
+(define NSAnyEventMask (sub1 (arithmetic-shift 1 (* 8 (ctype-sizeof _NSUInteger)))))
 
 ;; Call this function only in atomic mode:
 (define (check-one-event wait? dequeue?)

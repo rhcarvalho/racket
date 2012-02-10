@@ -34,16 +34,22 @@
      (get-pure-port 
       (string->url 
        (format "~a/pushes/~a/~a" git-url-base push-n100s push-nrem)))))
-  (match ls
-    [(list (regexp #rx"^([^ ]+) +([0-9abcdef]+)$" (list _ who end-commit))
-           (regexp #rx"^([0-9abcdef]+) +([0-9abcdef]+) +(.+)$" (list _ bstart bend branch))
-           ...)
-     (make-push-data who end-commit 
-                     (make-immutable-hash
-                      (map (lambda (b bs be) (cons b (vector bs be)))
-                           branch bstart bend)))]
-    [_
-     #f]))
+  (match 
+   ls
+   [(list (regexp #rx"^([^ ]+) +([0-9abcdef]+)$" (list _ who end-commit))
+          (regexp #rx"^([0-9abcdef]+) +([0-9abcdef]+) +(.+)$" (list _ bstart bend branch)))
+    (make-push-data who bend
+                    (make-immutable-hash
+                     (list (cons branch (vector bstart bend)))))]
+   [(list (regexp #rx"^([^ ]+) +([0-9abcdef]+)$" (list _ who end-commit))
+          (regexp #rx"^([0-9abcdef]+) +([0-9abcdef]+) +(.+)$" (list _ bstart bend branch))
+          ...)
+    (make-push-data who end-commit 
+                    (make-immutable-hash
+                     (map (lambda (b bs be) (cons b (vector bs be)))
+                          branch bstart bend)))]
+   [_
+    #f]))
 
 (define (pipe/proc cmds)
   (if (null? (cdr cmds))
@@ -76,6 +82,10 @@
 (define-struct (git-diff git-commit) (mfiles) #:prefab)
 (define-struct (git-merge git-commit) (from to) #:prefab)
 
+(define-struct git-commit* (branch hash author date msg) #:prefab)
+(define-struct (git-diff* git-commit*) (mfiles) #:prefab)
+(define-struct (git-merge* git-commit*) (from to) #:prefab)
+
 (define (read-until-empty-line in-p)
   (let loop ()
     (let ([l (read-line in-p)])
@@ -88,7 +98,7 @@
         [else
          (list* (regexp-replace #rx"^ +" l "") (loop))]))))
 
-(define (read-commit in-p)
+(define (read-commit branch in-p)
   (match (read-line in-p)
     [(? eof-object?)
      #f]
@@ -99,44 +109,47 @@
         (match-define (regexp #rx"^Date: +(.+)$" (list _ date)) (read-line in-p))
         (define _1 (read-line in-p))
         (define msg (read-until-empty-line in-p))
-        (make-git-merge hash author date msg from to)]
+        (make-git-merge* branch hash author date msg from to)]
        [(regexp #rx"^Author: +(.+)$" (list _ author))
         (match-define (regexp #rx"^Date: +(.+)$" (list _ date)) (read-line in-p))
         (define _1 (read-line in-p))
         (define msg (read-until-empty-line in-p))
         (define mfiles (read-until-empty-line in-p))
-        (make-git-diff hash author date msg mfiles)])]))
+        (make-git-diff* branch hash author date msg mfiles)])]))
 
 (define port-empty? port-closed?)
 
-(define (read-commits in-p)
+(define (read-commits branch in-p)
   (cond
     [(port-empty? in-p)
      empty]
-    [(read-commit in-p)
+    [(read-commit branch in-p)
      => (lambda (c) 
           (printf "~S\n" c)
-          (list* c (read-commits in-p)))]
+          (list* c (read-commits branch in-p)))]
     [else
      empty]))
 
-(define (parse-push num author in-p)
-  (make-git-push num author (read-commits in-p)))
-
 (define (get-scm-commit-msg rev repo)
   (match-define (struct push-data (who _ branches)) (push-info rev))
-  (match-define (vector start-commit end-commit) (hash-ref branches master-branch))
-  (parameterize ([current-directory repo])
-    (system/output-port 
-     #:k (curry parse-push rev who)
-     (git-path)
-     "--no-pager" "log" "--date=iso" "--name-only" "--no-merges"
-     (format "~a..~a" start-commit end-commit))))
+  (make-git-push
+   rev who
+   (apply append
+          (for/list
+           ([(branch cs) branches])
+           (match-define (vector start-commit end-commit) cs)
+           (parameterize 
+            ([current-directory repo])
+            (system/output-port 
+             #:k (curry read-commits branch)
+             (git-path)
+             "--no-pager" "log" "--date=iso" "--name-only" "--no-merges"
+             (format "~a..~a" start-commit end-commit)))))))
 (provide/contract
- [struct git-push 
+  [struct git-push 
          ([num exact-nonnegative-integer?]
           [author string?]
-          [commits (listof git-commit?)])]
+          [commits (listof (or/c git-commit? git-commit*?))])]
  [struct git-commit 
          ([hash string?]
           [author string?]
@@ -155,7 +168,41 @@
           [msg (listof string?)]
           [from string?]
           [to string?])]
+ [struct git-commit* 
+         ([branch string?]
+          [hash string?]
+          [author string?]
+          [date string?]
+          [msg (listof string?)])]
+ [struct git-diff* 
+         ([branch string?]
+          [hash string?]
+          [author string?]
+          [date string?]
+          [msg (listof string?)]
+          [mfiles (listof string?)])]
+ [struct git-merge* 
+         ([branch string?]
+          [hash string?]
+          [author string?]
+          [date string?]
+          [msg (listof string?)]
+          [from string?]
+          [to string?])]
  [get-scm-commit-msg (exact-nonnegative-integer? path-string? . -> . git-push?)])
+
+(define (git-commit-msg* gc)
+  (if (git-commit? gc)
+      (git-commit-msg gc)
+      (git-commit*-msg gc)))
+(define (git-commit-hash* gc)
+  (if (git-commit? gc)
+      (git-commit-hash gc)
+      (git-commit*-hash gc)))
+
+(provide/contract
+ [git-commit-hash* (-> (or/c git-commit? git-commit*?) string?)]
+ [git-commit-msg* (-> (or/c git-commit? git-commit*?) (listof string?))])
 
 (define (git-push-previous-commit gp)
   (define start (git-push-start-commit gp))
@@ -165,9 +212,15 @@
      (git-path)
      "--no-pager" "log" "--format=format:%P" start "-1")))  
 (define (git-push-start-commit gp)
-  (git-commit-hash (last (git-push-commits gp))))
+  (define cs (git-push-commits gp))
+  (if (empty? cs)
+      "xxxxxxxxxxxxxxxxxxxxxxxxx"
+      (git-commit-hash* (last cs))))
 (define (git-push-end-commit gp)
-  (git-commit-hash (first (git-push-commits gp))))
+  (define cs (git-push-commits gp))
+  (if (empty? cs)
+      "xxxxxxxxxxxxxxxxxxxxxxxxx"
+      (git-commit-hash* (first cs))))
 (provide/contract
  [git-push-previous-commit (git-push? . -> . string?)]
  [git-push-start-commit (git-push? . -> . string?)]
@@ -195,33 +248,46 @@
   (void))
 
 (define (scm-export-repo rev repo dest)
+  (define end (push-data-end-commit (push-info rev)))
+  (printf "Exporting ~v where end = ~a\n"
+          (list rev repo dest)
+          end)
   (pipe
    (system*
     (git-path) "archive"
     (format "--remote=~a" repo)
     (format "--prefix=~a/" (regexp-replace #rx"/+$" (path->string* dest) ""))
     "--format=tar"
-    (push-data-end-commit (push-info rev)))
+    end)
    (system* (find-executable-path "tar") "xf" "-" "--absolute-names"))
   (void))
 
 (define (scm-update repo)
   (parameterize ([current-directory repo])
-    (system* (git-path) "fetch" git-url-base))
+    (system* (git-path) "fetch"))
   (void))
 
 (define master-branch "refs/heads/master")
+(define release-branch "refs/heads/release")
 
-(define (scm-revisions-after cur-rev)
+(define (contains-drdr-request? p)
+  (for*/or ([c (in-list (git-push-commits p))]
+            [m (in-list (git-commit-msg* c))])
+           (regexp-match #rx"DrDr, test this push" m)))
+
+(define (scm-revisions-after cur-rev repo)
   (define newest-rev (newest-push))
   (for/list ([rev (in-range (add1 cur-rev) (add1 newest-rev))]
              #:when
              (let ([info (push-info rev)])
-               (and info (hash-has-key? (push-data-branches info) master-branch))))
+               (and info 
+                    (or (hash-has-key? (push-data-branches info) master-branch)
+                        (hash-has-key? (push-data-branches info) release-branch)
+                        (contains-drdr-request? (get-scm-commit-msg rev repo))))))
     rev))
 
 (provide/contract
  [scm-update (path? . -> . void?)]
- [scm-revisions-after (exact-nonnegative-integer? . -> . (listof exact-nonnegative-integer?))]
+ [scm-revisions-after (exact-nonnegative-integer? path-string? . -> . (listof exact-nonnegative-integer?))]
  [scm-export-file (exact-nonnegative-integer? path-string? string? path-string? . -> . void?)]
  [scm-export-repo (exact-nonnegative-integer? path-string? path-string? . -> . void?)])

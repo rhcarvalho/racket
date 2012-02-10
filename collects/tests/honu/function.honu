@@ -1,11 +1,12 @@
 #lang honu
 
-/*
-provide function;
-macro function ()
-  { _ name:identifier (args:identifier ...) { body ... } }
-  { #sx scheme:syntax #sx(define (name_result args_result ...)
-                         (honu-unparsed-begin body ...)) }
-  { _ (args:identifier ...) { body ... }}
-  { #sx scheme:syntax #sx(lambda (args_result ...) (honu-unparsed-begin body ...)) }
-  */
+function foo(x){
+  1 + x * 2
+}
+
+fun foo2(x){
+  foo(x + 2)
+}
+
+foo(5)
+foo2(3)

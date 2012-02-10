@@ -1,10 +1,12 @@
 #lang racket/base
 (require racket/class
          "../generic/interfaces.rkt"
+         "../generic/common.rkt"
          "../generic/sql-data.rkt"
          "../../util/private/geometry.rkt"
          (only-in "message.rkt" field-dvec->typeid))
-(provide dbsystem)
+(provide dbsystem
+         classify-my-sql)
 
 (define mysql-dbsystem%
   (class* object% (dbsystem<%>)
@@ -52,6 +54,50 @@
               (geometry2d? param))
     (error/no-convert fsym "MySQL" "parameter" param))
   param)
+
+;; ========================================
+
+;; SQL "parsing"
+;; We care about:
+;;  - determining whether commands must be prepared (to use binary data)
+;;    see http://dev.mysql.com/doc/refman/5.0/en/c-api-prepared-statements.html
+;;  - determining what statements are safe for the statement cache
+;;  - detecting commands that affect transaction status (maybe implicitly)
+;;    see http://dev.mysql.com/doc/refman/5.0/en/implicit-commit.html
+
+;; classify-my-sql : string [nat] -> symbol/#f
+(define classify-my-sql
+  (make-sql-classifier #:hash-comments? #t
+   '(;; Must be prepared
+     ("SELECT"            select)
+     ("SHOW"              show)
+
+     ;; Do not invalidate statement cache
+     ("INSERT"            insert)
+     ("DELETE"            delete)
+     ("UPDATE"            update)
+
+     ;; Explicit transaction commands
+     ("ROLLBACK WORK TO"  rollback-savepoint)
+     ("ROLLBACK TO"       rollback-savepoint)
+     ("RELEASE SAVEPOINT" release-savepoint)
+     ("SAVEPOINT"         savepoint)
+     ("START TRANSACTION" start)
+     ("BEGIN"             start)
+     ("COMMIT"            commit)
+     ("ROLLBACK"          rollback) ;; Note: after ROLLBACK TO, etc
+     ("SET autocommit"    set-autocommit) ;; trouble
+     ;; Note: commit/rollback may immediately start new transaction
+
+     ;; Implicit commit
+     ("ALTER"             implicit-commit)
+     ("CREATE"            implicit-commit)
+     ("DROP"              implicit-commit)
+     ("RENAME"            implicit-commit)
+     ("TRUNCATE"          implicit-commit)
+     ("LOAD"              implicit-commit)
+     ("LOCK TABLES"       implicit-commit)
+     ("UNLOCK TABLES"     implicit-commit))))
 
 ;; ========================================
 

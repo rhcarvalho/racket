@@ -186,16 +186,17 @@ considered important.
   (mk-specialized 'postgresql-data-source 'postgresql 0
                   '(#:user #:database #:password #:server #:port #:socket
                     #:allow-cleartext-password? #:ssl
-                    #:notice-handler #:notification-handler)))
+                    #:notice-handler #:notification-handler #:debug?)))
 
 (define mysql-data-source
   (mk-specialized 'mysql-data-source 'mysql 0
                   '(#:user #:database #:password #:server #:port #:socket #:ssl
-                    #:notice-handler)))
+                    #:notice-handler #:debug?)))
 
 (define sqlite3-data-source
   (mk-specialized 'sqlite3-data-source 'sqlite3 0
-                  '(#:database #:mode #:busy-retry-limit #:busy-retry-delay #:use-place)))
+                  '(#:database #:mode #:busy-retry-limit #:busy-retry-delay
+                    #:use-place #:debug?)))
 
 (define odbc-data-source
   (mk-specialized 'odbc-data-source 'odbc 0

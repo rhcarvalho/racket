@@ -125,10 +125,13 @@
 
  ;; the online check syntax status messages (mouse over the bottom right of drracket's window to see the messages during online expansion's various phases)
  (online-expansion-running "Online-Expansion läuft")
- (only-raw-text-files-supported "Nur reine Textdateien werden unterstützt")
- (abnormal-termination "Online-Expansion vorzeitig abgebrochen")
+ (online-expansion-only-raw-text-files-supported "Nur reine Text-Dateien sind unterstützt")
+ (online-expansion-abnormal-termination "Online-Expansion unglücklich abgebrochen")
+ (online-expansion-finished-successfully "Online-Expansion erfolgreich abgeschlossen")
+
  (jump-to-error "Zum Fehler springen")
  (online-expansion-is-disabled "Online-Expansion ist deaktiviert")
+ ;; these next two show up in the bar along the bottom of the drracket window
  (online-expansion-pending "Online-Expansion läuft ...")
  (online-expansion-finished "Online-Expansion fertig") ;; note: there may still be errors in this case
  
@@ -389,7 +392,6 @@
  (open-files-in-tabs "Dateien in separaten Tabs öffnen (nicht separaten Fenstern)")
  (show-interactions-on-execute "Interaktionen beim Programmstart automatisch öffnen")
  (switch-to-module-language-automatically "Automatisch in die `module'-Sprache wechseln, wenn ein Modul geöffnet wird")
- (old-style-keybindings "Historische Tastaturbelegungkeybindings (Start: <menukey>-t; Neuer Tab: <menukey>-=; Ersetzen: <menukey>-r)")
  (interactions-beside-definitions "Interaktionen neben den Definitionen anzeigen") ;; in preferences, below the checkbox one line above this one
  (show-line-numbers "Zeilennummern einblenden")
  (show-line-numbers/menu "Zeilen&nummern einblenden")
@@ -801,6 +803,8 @@
  (definitions-menu-item-help-string "Definitionsfenster ein-/ausblenden")
  (show-interactions-menu-item-label "&Interaktionen einblenden")
  (hide-interactions-menu-item-label "&Interaktionen ausblenden")
+ (use-horizontal-layout "Horizontal anordnen")
+ (use-vertical-layout "Vertikal anordnen")
  (interactions-menu-item-help-string "Interaktionsfenster ein-/ausblenden")
  (toolbar "Toolbar")
  (toolbar-on-top "Toolbar oben")
@@ -1120,9 +1124,13 @@
   (exited-successfully "Erfolgreich beendet.")
   (exited-with-error-code "Beendet mit Fehlercode ~a.") ;; ~a is filled in with a number between 1 and 255
   (program-ran-out-of-memory "Dem Programm ist der Speicher ausgegangen.")
- (last-stack-frame "letzten Stack-Frame zeigen")
- (last-stack-frames "die letzten ~a Stack-Frames zeigen")
- (next-stack-frames "die nächsten ~a Stack-Frames zeigen")
+  
+  (show-evaluation-terminated-dialog "Den Dialog ‘Auswertung abgebrochen’ zeigen")
+  (evaluation-terminated-ask "Diesen Dialog das nächste Mal anzeigen")
+  
+  (last-stack-frame "letzten Stack-Frame anzeigen")
+  (last-stack-frames "die letzten ~a Stack-Frames anzeigen")
+  (next-stack-frames "die nächsten ~a Stack-Frames anzeigen")
  
  ;;; welcoming message in repl
  (language "Sprache")
@@ -1242,8 +1250,8 @@
   "Der Stepper unterstützt die Sprachebene \"~a\" nicht.")
  (stepper-button-label "Stepper")
 
- (stepper-previous "< Schritt")
- (stepper-next "Schritt >")
+ (stepper-previous "Schritt")
+ (stepper-next "Schritt")
  (stepper-jump "Springen...")
  (stepper-jump-to-beginning "an den Anfang")
  (stepper-jump-to-end "ans Ende")

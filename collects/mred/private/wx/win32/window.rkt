@@ -17,6 +17,7 @@
          "theme.rkt"
          "cursor.rkt"
          "key.rkt"
+	 "dc.rkt"
          "font.rkt")
 
 (provide
@@ -361,7 +362,7 @@
                             #:scale-h [scale-h 1])
     (atomically
      (unless measure-dc
-       (let* ([bm (make-object bitmap% 1 1)]
+       (let* ([bm (make-object win32-bitmap% 1 1 #f)]
               [dc (make-object bitmap-dc% bm)])
          (set! measure-dc dc)))
      (send measure-dc set-font (or font
@@ -383,7 +384,7 @@
                                            (combine-h d1 d1) (combine-h a1 a2)))]
                                 [else
                                  (send measure-dc get-text-extent label #f #t)]))]
-                  [(->int) (lambda (v) (inexact->exact (floor v)))])
+                  [(->int) (lambda (v) (inexact->exact (ceiling v)))])
        (resize (->int (* scale-h (max (+ w dw) min-w)))
                (->int (* scale-w (max (+ h dh) min-h)))))))
 
@@ -443,7 +444,7 @@
         (let* ([len (DragQueryFileW hdrop i #f 0)]
                [b (malloc (add1 len) _int16)])
           (DragQueryFileW hdrop i b (add1 len))
-          (let ([s (cast b _pointer _string/utf-16)])
+          (let ([s (cast b _gcpointer _string/utf-16)])
             (queue-window-event this (lambda () (on-drop-file (string->path s)))))))
       (DragFinish hdrop)))
 

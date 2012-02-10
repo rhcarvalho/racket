@@ -1,6 +1,6 @@
 #lang racket/base
 
-(require honu/core/private/macro2
+(require honu/core/private/syntax
          honu/core/private/honu-typed-scheme
          honu/core/private/literals
          racket/list
@@ -36,9 +36,9 @@
                                 #'(sort store.result string<?
                                         #:key (lambda (name) order-by.result))
                                 #'store.result)])
-           #'(for/list ([name order]
-                        guard ...)
-               select.result)))
+           #'(%racket (for/list ([name order]
+                                 guard ...)
+                      select.result))))
        (values out #'rest #f)])))
           
 #|

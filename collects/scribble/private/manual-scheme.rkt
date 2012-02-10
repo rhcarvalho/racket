@@ -207,7 +207,7 @@
 (define (*as-modname-link s e)
   (make-link-element module-link-color
                      (list e)
-                     `(mod-path ,(format "~s" s))))
+                     `(mod-path ,(datum-intern-literal (format "~s" s)))))
 
 (define-syntax-rule (indexed-racket x)
   (add-racket-index 'x (racket x)))
@@ -230,19 +230,21 @@
 (define-/form racketblock/form racketblock)
 (define-/form racket/form racket)
 
-(define (*racketlink stx-id id . s)
+(define (*racketlink stx-id id style . s)
   (let ([content (decode-content s)])
     (make-delayed-element
      (lambda (r p ri)
-       (list
-        (make-link-element
-         #f
-         content
-         (or (find-racket-tag p ri stx-id #f)
-             `(undef ,(format "--UNDEFINED:~a--" (syntax-e stx-id)))))))
+       (make-link-element
+        style
+        content
+        (or (find-racket-tag p ri stx-id #f)
+            `(undef ,(format "--UNDEFINED:~a--" (syntax-e stx-id))))))
      (lambda () content)
      (lambda () content))))
 
-(define-syntax-rule (racketlink id . content)
-  (*racketlink (quote-syntax id) 'id . content))
-
+(define-syntax racketlink
+  (syntax-rules ()
+    [(_ id #:style style . content)
+     (*racketlink (quote-syntax id) 'id style . content)]
+    [(_ id . content)
+     (*racketlink (quote-syntax id) 'id #f . content)]))

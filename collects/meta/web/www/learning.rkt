@@ -7,7 +7,6 @@
   @page[#:part-of 'learning]{
     @parlist[@strong{Resources for Learning}
       (apply parlist @text{Documentation for getting started:} intros)
-      @text{@-cookbook — useful recipes, many of which apply to Racket.}
       @text{@-htdp — a textbook for introductory programming, but also
         worthwhile for experience programmers who are new to “functional
         programming.”}
@@ -34,7 +33,7 @@
              background: @|color|@";"})
     @(define place-names
        (add-between
-        (sort (map (lambda (p)
+        (sort (map (λ (p)
                      (regexp-replace #rx", [A-Z][A-Z]$" (place-location p) ""))
                    all-places)
               string<?)

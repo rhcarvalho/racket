@@ -20,27 +20,51 @@
 (flush-output)
 
 (when (eq? 'windows (system-type))
-  (let* ([concat string-append]
-         [studio  "c:/Program Files/Microsoft Visual Studio 10.0"]
-         [scommon (concat studio "/Common7")]
-         [vc      (concat studio "/VC")])
-    (when (directory-exists? studio)
-      (putenv "PATH"    (concat (getenv "PATH")
-				";" vc "/bin"
-				";" scommon "/IDE"
-				";" scommon "/Tools"
-				";" scommon "/Tools/bin"))
-      (putenv "INCLUDE" (concat ";" vc "/include"
-				";" vc "/atlmfc/include"
-				";" vc "/PlatformSDK/Include"))
-      (putenv "LIB"     (concat ";" vc "/lib"
-				";" vc "/atlmfc/lib"
-				";" vc "/PlatformSDK/lib")))))
+  (define concat string-append)
+  (define 64bit? (= 8 (compiler-sizeof '(* void))))
+  (define (find-dir what . dirs)
+    (or (for/or ([d (in-list dirs)]) (and (directory-exists? d) d))
+        (error (format "Could not find a directory: ~a" what))))
+  (define progfiles
+    (find-dir "Program Files" "C:/Program Files (x86)" "C:/Program Files"))
+  (define studio
+    (and progfiles (concat progfiles "/Microsoft Visual Studio 10.0")))
+  (when (and studio (directory-exists? studio))
+    (define (paths-env var . ps)
+      (define val
+        (apply concat (for/list ([p (in-list ps)]
+                                 #:when (and p (directory-exists? p)))
+                        (concat p ";"))))
+      (printf ">>> $~a = ~s\n" var val)
+      (putenv var val))
+    (define (vc p)     (concat studio "/VC/" p))
+    (define (common p) (concat studio "/Common7/" p))
+    (define (winsdk p) (concat progfiles "/Microsoft SDKs/Windows/v7.0A/" p))
+    (paths-env "PATH"
+               (getenv "PATH")
+               (vc (if 64bit? "BIN/amd64" "BIN"))
+               (vc "IDE") (vc "Tools") (vc "Tools/bin")
+               (common "Tools") (common "IDE"))
+    (paths-env "INCLUDE"
+               (vc "INCLUDE") (vc "ATLMFC/INCLUDE") (vc "PlatformSDK/INCLUDE")
+               (winsdk "include"))
+    (paths-env "LIB"
+               (vc (if 64bit? "LIB/amd64" "LIB"))
+               (vc (if 64bit? "ATLMFC/LIB/amd64" "ATLMFC/LIB"))
+               (vc "PlatformSDK/LIB")
+               (winsdk (if 64bit? "Lib/x64" "Lib")))
+    (putenv "LIBPATH" (getenv "LIB"))
+    (define tmp (getenv "TEMP"))
+    (unless (and tmp (directory-exists? tmp))
+      (putenv "TEMP" (find-dir "Temporary directory" "C:/Temp" "C:/tmp")))
+    (when 64bit? (putenv "Platform" "X64"))))
 
 (require dynext/compile dynext/link mzlib/etc)
 (define delete-test-files
   (let ([c  (build-path (this-expression-source-directory) "foreign-test.c")]
-        [o  (build-path (current-directory) "foreign-test.o")]
+        [o  (build-path (current-directory)
+                        (if (eq? 'windows (system-type))
+                          "foreign-test.obj" "foreign-test.o"))]
         [so (build-path (current-directory)
                         (bytes->path (bytes-append #"foreign-test"
                                                    (system-type 'so-suffix))))])
@@ -51,7 +75,11 @@
       (link-extension #t (list o) so))
     (lambda ()
       (when (file-exists? o) (delete-file o))
-      (when (file-exists? so) (delete-file so)))))
+      (when (file-exists? so)
+        (with-handlers ([exn:fail:filesystem?
+                         (lambda (e)
+                           (eprintf "warning: could not delete ~e\n" so))])
+          (delete-file so))))))
 
 ;; Test arrays
 (define _c7_list (_array/list _byte 7))
@@ -198,34 +226,41 @@
       (test 12 array-ref a 1)
       (ptr-set! p _byte 1 17)
       (test 17 array-ref a 1)))
-  (let ([v (for/list ([i 7]) i)])
-    ;; pass array as pointer:
-    ;; FIXME: these tests wrap the result pointer as non-GCable,
-    ;; but _c7_list allocates the argument array as GCable.
-    (t (for/list ([i 7]) (add1 i)) 'increment_c_array (_fun _c7_list -> (_list o _byte 7)) v)
-    (t (for/list ([i 7]) (add1 i)) 'increment_c_array (_fun _c7_list -> _c7_list) v)
-    (let ([r ((ffi 'increment_c_array (_fun _c7_list -> (_array _byte 7))) v)])
-      (test 2 array-ref r 1))
-    ;; Array within struct argument and result:
-    (let* ([ic7i (make-ic7i 13 v 14)]
-           [ic7i-2 ((ffi 'increment_ic7i (_fun _ic7i -> _ic7i)) ic7i)])
-      (test v ptr-ref (cast ic7i _ic7i-pointer _pointer) _c7_list 'abs (ctype-sizeof _int))
-      (test 13 ic7i-i1 ic7i)
-      (test v ic7i-c7 ic7i)
-      (test 14 ic7i-i2 ic7i)
-      (test 14 ic7i-i1 ic7i-2)
-      (test (map add1 v) ic7i-c7 ic7i-2)
-      (test 15 ic7i-i2 ic7i-2)
-      (let ([ic7i-3 ((ffi 'ic7i_cb (_fun _ic7i (_fun _ic7i -> _ic7i) -> _ic7i))
-                     ic7i
-                     (lambda (ic7i-4)
-                       (test 12 ic7i-i1 ic7i-4)
-                       (test (cons 255 (map sub1 (cdr v))) ic7i-c7 ic7i-4)
-                       (test 13 ic7i-i2 ic7i-4)
-                       (make-ic7i 2 (map (lambda (x) (- 252 x)) v) 9)))])
-        (test 3 ic7i-i1 ic7i-3)
-        (test (map add1 (map (lambda (x) (- 252 x)) v)) ic7i-c7 ic7i-3)
-        (test 10 ic7i-i2 ic7i-3))))
+  ;; Disable these tests on Windows/i386 where they fail (and crash the process
+  ;; killing all other tests).  Matthew said: There's no consistent spec for
+  ;; functions that return structures in i386 Windows.  Historically, gcc does
+  ;; it one way, and MSVC another.  I think libffi expects the gcc protocol.
+  ;; Newer versions of gcc may agree with msvc, so this may change in the
+  ;; future.
+  (unless (and (eq? 'windows (system-type)) (= 4 (compiler-sizeof '(* void))))
+    (let ([v (for/list ([i 7]) i)])
+      ;; pass array as pointer:
+      ;; FIXME: these tests wrap the result pointer as non-GCable,
+      ;; but _c7_list allocates the argument array as GCable.
+      (t (for/list ([i 7]) (add1 i)) 'increment_c_array (_fun _c7_list -> (_list o _byte 7)) v)
+      (t (for/list ([i 7]) (add1 i)) 'increment_c_array (_fun _c7_list -> _c7_list) v)
+      (let ([r ((ffi 'increment_c_array (_fun _c7_list -> (_array _byte 7))) v)])
+        (test 2 array-ref r 1))
+      ;; Array within struct argument and result:
+      (let* ([ic7i (make-ic7i 13 v 14)]
+             [ic7i-2 ((ffi 'increment_ic7i (_fun _ic7i -> _ic7i)) ic7i)])
+        (test v ptr-ref (cast ic7i _ic7i-pointer _pointer) _c7_list 'abs (ctype-sizeof _int))
+        (test 13 ic7i-i1 ic7i)
+        (test v ic7i-c7 ic7i)
+        (test 14 ic7i-i2 ic7i)
+        (test 14 ic7i-i1 ic7i-2)
+        (test (map add1 v) ic7i-c7 ic7i-2)
+        (test 15 ic7i-i2 ic7i-2)
+        (let ([ic7i-3 ((ffi 'ic7i_cb (_fun _ic7i (_fun _ic7i -> _ic7i) -> _ic7i))
+                       ic7i
+                       (lambda (ic7i-4)
+                         (test 12 ic7i-i1 ic7i-4)
+                         (test (cons 255 (map sub1 (cdr v))) ic7i-c7 ic7i-4)
+                         (test 13 ic7i-i2 ic7i-4)
+                         (make-ic7i 2 (map (lambda (x) (- 252 x)) v) 9)))])
+          (test 3 ic7i-i1 ic7i-3)
+          (test (map add1 (map (lambda (x) (- 252 x)) v)) ic7i-c7 ic7i-3)
+          (test 10 ic7i-i2 ic7i-3)))))
   ;; Two-dimensional array:
   ;; FIXME: same allocation bug for result as above
   (let ([v (for/list ([j 3]) (for/list ([i 7]) (+ i j)))]

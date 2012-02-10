@@ -158,11 +158,17 @@
                   (n-ary->binary #'op.unsafe #'f1.opt #'f2.opt #'(fs.opt ...))))
   (pattern (#%plain-app (~var op (float-op binary-float-comps))
                         f1:float-expr
+                        f2:float-expr)
+           #:with opt
+           (begin (log-optimization "binary float comp" float-opt-msg this-syntax)
+                  #'(op.unsafe f1.opt f2.opt)))
+  (pattern (#%plain-app (~var op (float-op binary-float-comps))
+                        f1:float-expr
                         f2:float-expr
                         fs:float-expr ...)
            #:with opt
-           (begin (log-optimization "binary float comp" float-opt-msg this-syntax)
-                  (n-ary->binary #'op.unsafe #'f1.opt #'f2.opt #'(fs.opt ...))))
+           (begin (log-optimization "multi float comp" float-opt-msg this-syntax)
+                  (n-ary-comp->binary #'op.unsafe #'f1.opt #'f2.opt #'(fs.opt ...))))
 
   (pattern (#%plain-app (~and op (~literal -)) f:float-expr)
            #:with opt

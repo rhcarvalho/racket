@@ -11,21 +11,21 @@
 ;; gitweb stuff
 
 (define header+footer
-  (delay (cdr (or (regexp-match
-                   ;; extract just the meat between the <body>...</body>
-                   #rx"<body[^<>]*>(.*?){{{BODY}}}(.*?)</body>"
-                   (xml->string @page[#:id 'git #:html-only #t "{{{BODY}}}"]))
-                  (error 'gitweb-skeleton "internal error")))))
+  (lazy (cdr (or (regexp-match
+                  ;; extract just the meat between the <body>...</body>
+                  #rx"<body[^<>]*>(.*?){{{BODY}}}(.*?)</body>"
+                  (xml->string @page[#:id 'git #:html-only #t "{{{BODY}}}"]))
+                 (error 'gitweb-skeleton "internal error")))))
 (define header @plain[#:file "header.html" (car  (force header+footer))])
 (define footer @plain[#:file "footer.html" (cadr (force header+footer))])
 
 (define gitweb-logo (copyfile (in-here "gitweb-logo.png") "tiny-logo.png"))
 
 (define home-text
-  (delay @text{
+  (lazy @text{
     @p{This is the Racket git server.}
     @p{See the "brief", PLT-oriented @intro{introduction to git}.}}))
-(define home-file @plain[#:file "home-text.html" #:referrer values home-text])
+(define home-file @plain[#:file "home-text.html" home-text])
 
 (define gitweb-config
   @plain[#:file "gitweb_config.perl"]{
@@ -125,8 +125,7 @@
 
 ;; xhtml strict doesn't allow lists inside <p>, so fake our own paragraphs
 ;; using divs:
-(define p*
-  (make-separated-tag values (lambda text (apply div class: 'p text))))
+(define p* (make-separated-tag values (λ text (apply div class: 'p text))))
 
 @page[#:title "git intro" #:extra-headers style]{
 
@@ -985,7 +984,7 @@
 
 @section{Working with git}
 
-@subsection[#:newpage? #f]{basics}
+@subsection[#:newpage? #f]{Basics}
 @p*{
   The above description is much simplified in that it doesn't deal with
   development that happens outside of your own work — and such development
@@ -1190,7 +1189,7 @@
   show all branches.  Either way you'll be able to see that a fast-forward
   merge is possible.}
 
-@subsection{concurrent development}
+@subsection{Concurrent development}
 @p*{
   Again, we'll assume starting with the @path{foo2} repository before the pull.
   We will now create a new commit before we get changes.  This makes it similar
@@ -1394,7 +1393,7 @@
   otherwise leave you in a state where you can look at things and decide how to
   proceed yourself.}
 
-@subsection{additional forms of history tweaking}
+@subsection{Additional forms of history tweaking}
 @p*{
   As described in the previous section, rebasing is not some kind of a magical
   operation: it is really just an expected by-product of the way git works — of
@@ -1505,7 +1504,7 @@
   one with a new commit time; and if you delete the text completely, the
   re-commit will be aborted, and you will be left with the old one intact.}
 
-@subsection{resetting the tree}
+@subsection{Resetting the tree}
 @p*{
   Both the @cmd{commit --amend} feature and rebasing build on the ability to
   “move” the current branch tip to some earlier commit in its history.  To do
@@ -1570,7 +1569,7 @@
   @cmd{git reset} can be restricted to make it work only on a specific set of
   paths, not on the whole repository.}
 
-@subsection{other forms of reverting}
+@subsection{Other forms of reverting}
 @p*{
   While we're on the topic of reverting files, there are three more things
   worth mentioning:
@@ -1617,7 +1616,7 @@
        and @cmd{git checkout} as the way to do the equivalent of @cmd{svn
        revert} (which are described above.)}}}
 
-@subsection{dealing with conflicts}
+@subsection{Dealing with conflicts}
 @p*{
   We'll now see how to deal with merge conflicts.  First, we'll set up the
   repository for a conflict.  Continuing with the @path{foo2} clone, we'll
@@ -1852,7 +1851,7 @@
   commit message are still fine as a description of the modifications, then a
   rebase is fine; otherwise you might want to @cmd{merge} instead.}
 
-@subsection{copying/renaming files}
+@subsection{Copying/renaming files}
 @p*{
   Git is, by design, tracking snapshots of the complete repository tree.
   Specifically, it does @em{not} keep explicit track of file/directory copies
@@ -1938,7 +1937,7 @@
   that is split into two files etc.  Like @cmd{log} and @cmd{diff}, it needs
   some flags to do the extra work (see @cmd{-M} and @cmd{-C}).}
 
-@subsection{managing branches}
+@subsection{Managing branches}
 @p*{
   As seen in various places above, a branch in git is basically just a SHA1
   pointer to a commit (and therefore to the whole line of commits in its
@@ -2054,7 +2053,7 @@
   that.  In addition, you usually don't delete remote branches, when you do,
   you need to use the @cmd{-r} flag too.}
 
-@subsection{using branches}
+@subsection{Using branches}
 @p*{
   Since git branches are so light weight, they fit any kind of parallel work
   you need to do on several different topics.  A result of that is that it is
@@ -2293,7 +2292,7 @@
        $ git config branch.my-branch.merge
        refs/heads/different-branch}}
 
-@subsection{managing remotes}
+@subsection{Managing remotes}
 @p*{
   The distributed nature of git means that you can interact with multiple
   remote repositories.  You could have work done with other people done
@@ -2359,7 +2358,7 @@
   this often enough, you will likely find it more convenient to add a named
   remote.}
 
-@subsection{using private repositories}
+@subsection{Using private repositories}
 @p*{
   A particularly useful use-case for adding a new remote is when you want to
   have private work done in your own fork of the plt repository.  Such a mode
@@ -2570,7 +2569,7 @@
      your global .gitconfig file.  For example, I have these settings:
      @pre|{[sendemail]
              from = Eli Barzilay <eli@barzilay.org>
-             bcc = eli@eli.barzilay.org
+             bcc = eli@barzilay.org
              suppresscc = self}|
      and you can see more in the @man{git-config} and @man{git-send-email} man
      pages.  The address to send the patches to is also configurable — you can

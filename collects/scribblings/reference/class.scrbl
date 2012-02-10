@@ -1076,8 +1076,8 @@ This form calls the method in a way analogous to @racket[(apply
 _method-id _arg ... _arg-list-expr)]. The @racket[arg-list-expr]
 must not be a parenthesized expression.
 
-Methods are called from outside a class with the @racket[send] and 
-@racket[send/apply] forms.
+Methods are called from outside a class with the @racket[send],
+@racket[send/apply], and @racket[send/keyword-apply] forms.
 
 @defform*[[(send obj-expr method-id arg ...)
            (send obj-expr method-id arg ... . arg-list-expr)]]{
@@ -1097,6 +1097,22 @@ If @racket[obj-expr] does not produce an object, the
 
 Like the dotted form of @racket[send], but @racket[arg-list-expr] can
 be any expression.}
+
+@defform[(send/keyword-apply obj-expr method-id 
+                             keyword-list-expr value-list-expr 
+                             arg ... arg-list-expr)]{
+
+Like @racket[send/apply], but with expressions for keyword and
+argument lists like @racket[keyword-apply].}
+
+@defproc[(dynamic-send [obj object?] 
+                       [method-name symbol?]
+                       [v any/c] ...
+                       [#:<kw> kw-arg any/c] ...) any]{
+
+Calls the method on @racket[obj] whose name matches
+@racket[method-name], passing along all given @racket[v]s and
+@racket[kw-arg]s.}
 
 
 @defform/subs[(send* obj-expr msg ...)
@@ -1478,9 +1494,13 @@ resulting trait are the same as for @racket[trait-sum], otherwise the
 @defform/subs[
 #:literals (field init init-field inherit inherit-field super inner override augment augride absent)
 
-(class/c member-spec ...)
+(class/c maybe-opaque member-spec ...)
 
-([member-spec
+([maybe-opaque
+  (code:line)
+  (code:line #:opaque)]
+
+ [member-spec
   method-spec
   (field field-spec ...)
   (init field-spec ...)
@@ -1521,6 +1541,12 @@ contract forms, such as @racket[->m], are provided as a shorthand
 for writing method contracts.
 
 Methods and fields listed in an @racket[absent] clause must @emph{not} be present in the class.
+
+A class contract can be specified to be @emph{opaque} with the @racket[#:opaque]
+keyword. An opaque class contract will only accept a class that defines
+exactly the methods and fields specified by the contract. A contract error
+is raised if the contracted class contains any methods or fields that are
+not specified.
 
 The external contracts are as follows:
 

@@ -31,7 +31,7 @@
             #:note [note #f])
   (define tr-name @list{PLT-TR-2010-@num})
   (define author-strings
-    (map (lambda (a) (if (eq? 'plt a) "PLT" (person-bibname (find-person a))))
+    (map (λ (a) (if (eq? 'plt a) "PLT" (person-bibname (find-person a))))
          authors*))
   (define (link fmt [ver 'recent]) @a[href: (doc-url docname fmt ver)]{[@fmt]})
   (define (title-line link?)
@@ -65,7 +65,7 @@
           number      = {|@tr-name},
           institution = {PLT Inc.},
           year        = {2010},
-          note        = {\url{|@(get-resource-path cite-page #t)}}
+          note        = {\url{|@(url-of cite-page #t)}}
         }}|
       @@refblock{Scribble}|{
         (define plt-tr|@num
@@ -74,7 +74,7 @@
                     #:date     "2010"
                     #:location (techrpt-location #:institution "PLT Inc."
                                                  #:number "|@tr-name")
-                    #:url      "|@(get-resource-path cite-page #t)"))}|
+                    #:url      "|@(url-of cite-page #t)"))}|
       @h2{Specific Versions}
       @blockquote{
         @table[frame: 'box rules: 'rows cellpadding: 10]{

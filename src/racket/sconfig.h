@@ -162,7 +162,9 @@
 # if defined(i386)
 #  define SCHEME_PLATFORM_LIBRARY_SUBPATH "i386-linux"
 #  define REGISTER_POOR_MACHINE
-#  define ASM_DBLPREC_CONTROL_87
+#  ifndef MZ_USE_JIT_SSE
+#   define ASM_DBLPREC_CONTROL_87
+#  endif
 # endif
 # if defined(powerpc)
 #  define SCHEME_PLATFORM_LIBRARY_SUBPATH "ppc-linux"
@@ -186,7 +188,9 @@
 # if defined(__x86_64__)
 #  define SCHEME_PLATFORM_LIBRARY_SUBPATH "x86_64-linux"
 #  define REGISTER_POOR_MACHINE
-#  define ASM_DBLPREC_CONTROL_87
+#  ifdef MZ_NO_JIT_SSE
+#   define ASM_DBLPREC_CONTROL_87
+#  endif
 # endif
 # ifndef SCHEME_PLATFORM_LIBRARY_SUBPATH
 #  define SCHEME_PLATFORM_LIBRARY_SUBPATH "unknown-linux"
@@ -258,6 +262,8 @@
 
 # define USE_IEEE_FP_PREDS
 # define POW_HANDLES_INF_CORRECTLY
+
+# define USE_DYNAMIC_FDSET_SIZE
 
 # define SIGSET_IS_SIGNAL
 
@@ -336,17 +342,21 @@
 #  define SCHEME_PLATFORM_LIBRARY_SUBPATH "i386-freebsd"
 #  define REGISTER_POOR_MACHINE
 #  define MZ_USE_JIT_I386
-#  if defined(__FreeBSD_kernel__)
-#   define ASM_DBLPREC_CONTROL_87
-#  else
-#   define FREEBSD_CONTROL_387
+#  ifndef MZ_JIT_X86_SSE
+#    if defined(__FreeBSD_kernel__)
+#     define ASM_DBLPREC_CONTROL_87
+#    else
+#     define FREEBSD_CONTROL_387
+#    endif
 #  endif
 # elif defined(__amd64__)
 #  define SCHEME_PLATFORM_LIBRARY_SUBPATH "amd64-freebsd"
 #  define REGISTER_POOR_MACHINE
 #  define MZ_USE_JIT_X86_64
-#  if defined(__FreeBSD_kernel__)
-#   define ASM_DBLPREC_CONTROL_87
+#  ifdef MZ_NO_JIT_SSE
+#    if defined(__FreeBSD_kernel__)
+#     define ASM_DBLPREC_CONTROL_87
+#    endif
 #  endif
 # elif defined(__sparc64__)
 #  define SCHEME_PLATFORM_LIBRARY_SUBPATH "sparc64-freebsd"
@@ -751,9 +761,17 @@
 # define MZ_USE_JIT_X86_64
 #else
 # define MZ_USE_JIT_I386
-# define ASM_DBLPREC_CONTROL_87
+# ifndef MZ_NO_JIT_SSE
+#  define MZ_USE_JIT_SSE
+#  define ASM_DBLPREC_CONTROL_87
+# endif
 #endif
 # define MZ_JIT_USE_MPROTECT
+
+#if defined(__x86_64__)
+/* work around a bug in localtime() in 10.6.8 */
+# define MIN_VALID_DATE_SECONDS -67768040609715600
+#endif
 
 # define FLAGS_ALREADY_SET
 
@@ -937,7 +955,10 @@
 
 #if defined(__QNX__)
 
+#if defined(i386)
 # define SCHEME_PLATFORM_LIBRARY_SUBPATH "i386-qnx"
+#endif
+# define ASSUME_FIXED_STACK_SIZE
 
 # include "uconfig.h"
 # define SIGSET_IS_SIGNAL
@@ -945,10 +966,19 @@
 
 # define USE_FCNTL_O_NONBLOCK
 
-# define ASSUME_FIXED_STACK_SIZE
 # define FIXED_STACK_SIZE 524288
 
 # define FLAGS_ALREADY_SET
+
+#if defined(i386)
+# define MZ_USE_JIT_I386
+# define MZ_JIT_USE_MPROTECT
+#endif
+#if defined(__x86_64__)
+# define MZ_USE_JIT_X86_64
+# define MZ_JIT_USE_MPROTECT
+# define MZ_USE_DWARF_LIBUNWIND
+#endif
 
 #endif
 
@@ -1002,6 +1032,8 @@
  /* USER_TIME_IS_CLOCK uses the user time for system milliseconds. */
 
  /* TIME_TYPE_IS_UNSIGNED converts time_t values as unsigned. */
+
+ /* MIN_VALID_DATE_SECONDS sets a minimum vald time in seconds. */
 
  /* PROCESS_FUNCTION adds (process ...) and (system ...) functions */
 

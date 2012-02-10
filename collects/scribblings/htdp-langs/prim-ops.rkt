@@ -1,5 +1,4 @@
-#reader scribble/reader
-#lang racket/base
+#lang at-exp racket/base
 (require "common.rkt"
          scribble/decode
          scribble/struct
@@ -310,12 +309,18 @@
 
 
   @defform*[#:id [check-within check-within-id]
-            [(check-within expression expected-expression delta-expression)]]{
+            [(check-within expression expected-expression delta)]]{
 
-   Checks that the first @racket[expression] evaluates to a value within
-   @racket[delta-expression] of the @racket[expected-expression]. If
-   @racket[delta-expression] is not a number, @check-within-elem reports an
-   error.}
+  Checks whether the value of the @racket[expression] expression is
+  structurally equal to the value produced by the
+  @racket[expected-expression] expression; every number in the first
+  expression must be within @racket[delta] of the corresponding number in
+  the second expression.
+
+  It is an error for @racket[expressions] or @racket[expected-expression]
+  to produce a function value.
+
+  If @racket[delta] is not a number, @check-within-elem reports an error.} 
 
 
   @defform*[#:id [check-error check-error-id]
@@ -377,12 +382,24 @@
   way as for the @racket[(#,require-elem string)] form.}
 
 
+  @deftogether[(
   @defform/none[#:literals (planet)
-                (#,require-elem (planet string (string string number number)))]{
+                (#,require-elem (planet string (string string number number)))]{}
+  @defform/none[#:literals (planet) (#,require-elem (planet id))]{}
+  @defform/none[#:literals (planet) (#,require-elem (planet string))]{})]{
 
   Accesses a library that is distributed on the internet via the
   @|PLaneT| server, making it definitions available in the current module
-  (i.e., current file).}))
+  (i.e., current file).
+
+  The full grammar for planet requires is given in 
+  @secref["require"
+          #:doc '(lib "scribblings/reference/reference.scrbl")], but
+  the best place to find examples of the syntax is on the
+  @link["http://planet.racket-lang.org"]{the @PLaneT server}, in the
+  description of a specific package.  
+}
+))
 
 ;; ----------------------------------------
 

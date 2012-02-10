@@ -4,8 +4,11 @@
          racket/place
          racket/promise
          racket/serialize
+         racket/runtime-path
+         (for-syntax (only-in racket/base quote))
          ffi/unsafe/atomic
          "interfaces.rkt"
+         "common.rkt"
          "prepared.rkt")
 (provide place-connect
          place-proxy-connection%)
@@ -14,6 +17,9 @@
   (place-channel-put chan (serialize datum)))
 (define (pchan-get chan)
   (deserialize (place-channel-get chan)))
+
+(define-runtime-module-path-index _place-server
+  'db/private/generic/place-server)
 
 (define connection-server-channel
   (delay/sync
@@ -64,30 +70,33 @@
     (define/public (get-dbsystem) (error 'get-dbsystem "not implemented"))
     (define/public (get-base) this)
 
-    (define/public (query fsym stmt)
+    (define/public (query fsym stmt cursor?)
       (call 'query fsym
             (match stmt
               [(? string?) (list 'string stmt)]
-              [(statement-binding pst meta params)
-               (list 'statement-binding (send pst get-handle) meta params)])))
+              [(statement-binding pst params)
+               (list 'statement-binding (send pst get-handle) params)])
+            cursor?))
     (define/public (prepare fsym stmt close-on-exec?)
       (call 'prepare fsym stmt close-on-exec?))
+    (define/public (fetch/cursor fsym cursor fetch-size)
+      (call 'fetch/cursor fsym (cursor-result-extra cursor) fetch-size))
     (define/public (transaction-status fsym)
       (call 'transaction-status fsym))
-    (define/public (start-transaction fsym iso)
-      (call 'start-transaction fsym iso))
-    (define/public (end-transaction fsym mode)
-      (call 'end-transaction fsym mode))
+    (define/public (start-transaction fsym iso cwt?)
+      (call 'start-transaction fsym iso cwt?))
+    (define/public (end-transaction fsym mode cwt?)
+      (call 'end-transaction fsym mode cwt?))
     (define/public (list-tables fsym schema)
       (call 'list-tables fsym schema))
 
-    (define/public (free-statement pst)
+    (define/public (free-statement pst need-lock?)
       (start-atomic)
       (let ([handle (send pst get-handle)])
         (send pst set-handle #f)
         (end-atomic)
         (when channel
-          (call/d 'free-statement handle))))
+          (call/d 'free-statement handle need-lock?))))
 
     (define/private (sexpr->result x)
       (match x
@@ -95,6 +104,8 @@
          (simple-result y)]
         [(list 'rows-result h rows)
          (rows-result h rows)]
+        [(list 'cursor-result info handle)
+         (cursor-result info #f handle)]
         [(list 'prepared-statement handle close-on-exec? param-typeids result-dvecs)
          (new prepared-statement%
               (handle handle)

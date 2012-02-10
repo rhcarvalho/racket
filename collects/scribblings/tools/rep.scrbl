@@ -7,7 +7,7 @@
 }
 
 
-@defclass[drracket:rep:text% scheme:text% (drracket:rep:text<%>)]{
+@defclass[drracket:rep:text% racket:text% (drracket:rep:text<%>)]{
 
 This class implements a read-eval-print loop for DrRacket.  User
 submitted evaluations in DrRacket are evaluated asynchronously, in an
@@ -185,8 +185,8 @@ clicked.
 
 @defmethod[(get-user-thread)
            (or/c false/c thread?)]{
-This method returns the thread that the users code runs
-in. It is returns a different result, each time the user
+This method returns the thread that the user's code runs
+in. It returns a different result each time the user
 runs the program.
 
 It is @racket[#f] before the first time the user click on

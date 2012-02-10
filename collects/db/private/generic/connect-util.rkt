@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/class
-         "interfaces.rkt")
+         "interfaces.rkt"
+         "common.rkt")
 (provide kill-safe-connection
          virtual-connection
          connection-pool
@@ -62,13 +63,14 @@
       (connected?)
       (disconnect)
       (get-dbsystem)
-      (query fsym stmt)
+      (query fsym stmt cursor?)
       (prepare fsym stmt close-on-exec?)
+      (fetch/cursor fsym cursor fetch-size)
       (get-base)
-      (free-statement stmt)
+      (free-statement stmt need-lock?)
       (transaction-status fsym)
-      (start-transaction fsym isolation)
-      (end-transaction fsym mode)
+      (start-transaction fsym isolation cwt?)
+      (end-transaction fsym mode cwt?)
       (list-tables fsym schema))
 
     (super-new)))
@@ -117,7 +119,9 @@
       ;; timeout? = if connection open, then wait longer
       (let* ([c (hash-ref key=>conn key #f)]
              [in-trans? (with-handlers ([exn:fail? (lambda (e) #f)])
-                          (and c (send c transaction-status 'virtual-connection)))])
+                          (and c
+                               (send c connected?)
+                               (send c transaction-status 'virtual-connection)))])
         (cond [(not c) (void)]
               [(and timeout? in-trans?)
                (hash-set! alarms c (fresh-alarm-for key))]
@@ -176,10 +180,11 @@
     (define-forward
       (#f #f     (connected?))
       (#t '_     (get-dbsystem))
-      (#t '_     (query fsym stmt))
-      (#t '_     (start-transaction fsym isolation))
-      (#f (void) (end-transaction fsym mode))
-      (#f #f     (transaction-status fsym))
+      (#t '_     (query fsym stmt cursor?))
+      (#t '_     (fetch/cursor fsym stmt fetch-size))
+      (#t '_     (start-transaction fsym isolation cwt?))
+      (#f (void) (end-transaction fsym mode cwt?))
+      (#t '_     (transaction-status fsym))
       (#t '_     (list-tables fsym schema)))
 
     (define/public (get-base)
@@ -199,7 +204,7 @@
         (error fsym "cannot prepare statement with virtual connection"))
       (send (get-connection #t) prepare fsym stmt close-on-exec?))
 
-    (define/public (free-statement stmt)
+    (define/public (free-statement stmt need-lock?)
       (error 'free-statement
              "internal error: virtual connection does not own statements"))))
 
@@ -335,13 +340,14 @@
 
     (define-forward define/public
       (get-dbsystem)
-      (query fsym stmt)
+      (query fsym stmt cursor?)
       (prepare fsym stmt close-on-exec?)
+      (fetch/cursor fsym stmt fetch-size)
       (get-base)
-      (free-statement stmt)
+      (free-statement stmt need-lock?)
       (transaction-status fsym)
-      (start-transaction fsym isolation)
-      (end-transaction fsym mode)
+      (start-transaction fsym isolation cwt?)
+      (end-transaction fsym mode cwt?)
       (list-tables fsym schema))
 
     ;; (define-forward define/override (connected?))

@@ -1,9 +1,13 @@
 #lang racket/base
 
-(require "macro2.rkt"
+(require "syntax.rkt"
+         "literals.rkt"
+         (only-in "operator.rkt" honu-equal)
+         (only-in "honu2.rkt" honu-declaration separate-ids)
          (for-syntax racket/base
                      "literals.rkt"
                      "parse2.rkt"
+                     "util.rkt"
                      syntax/parse)
          racket/class)
 
@@ -12,32 +16,35 @@
     (syntax-parse method #:literals (define)
       [(define (name args ...) body ...)
        #'(define/public (name args ...) body ...)]))
-  (define-splicing-syntax-class honu-class-method
+  (define-literal-set equals (honu-equal))
+  (define-splicing-syntax-class honu-class-thing
+                                #:literal-sets (equals)
     [pattern method:honu-function
-             #:with result (replace-with-public #'method.result)]))
+             #:with result (replace-with-public (local-binding method.result))]
+    [pattern var:honu-declaration
+             #:with result #'(field [var.name var.expression] ...)]))
 
 (provide honu-class)
 (define-honu-syntax honu-class
   (lambda (code context)
     (syntax-parse code #:literal-sets (cruft)
-      [(_ name (#%parens constructor-argument ...) (#%braces method:honu-class-method ...) . rest)
+      ;; FIXME: empty parenthesis for constructor arguments should be optional
+      [(_ name (#%parens (~var constructor-argument (separate-ids (literal-syntax-class honu-comma) (literal-syntax-class honu-comma))))
+          (#%braces method:honu-class-thing ...) . rest)
        (define class
-         #'(define name (class* object% ()
-                                (super-new)
-                                (init-field constructor-argument ...)
-                                method.result ...)))
-       (values
-         class
-         #'rest
-         #t)])))
+         #'(%racket (define name (class* object% ()
+                                         (super-new)
+                                         (init-field constructor-argument.id ...)
+                                         method.result ...))))
+       (values class (local-binding rest) #t)])))
 
 (provide honu-new)
 (define-honu-syntax honu-new
   (lambda (code context)
     (syntax-parse code #:literal-sets (cruft)
-      [(_ name (#%parens arg:honu-expression ...) . rest)
-       (define new #'(make-object name arg.result ...))
+      [(_ name (#%parens arg:honu-expression/comma) . rest)
+       (define new #'(%racket (make-object name arg.result ...)))
        (values
          new
-         #'rest
+         (local-binding rest)
          #f)])))

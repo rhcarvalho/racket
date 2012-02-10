@@ -11,6 +11,12 @@
          racket/draw
          scheme/class)
 
+(define pink-code-font
+  (if (and (eq? (system-type) 'macosx)
+           (member "Courier" (get-face-list)))
+      "Courier"
+      'modern))
+
 (require (for-syntax scheme/base))
   
 (provide find-enclosing-loc-wrapper
@@ -53,15 +59,15 @@
          (struct-out line)
          current-text)
   
-  
   (define STIX? #f)
   
   ;; atomic-rewrite-table : (parameter (listof (list symbol (union string pict))))
   (define atomic-rewrite-table 
     (make-parameter 
-     `((... ,(if STIX?
-                 (basic-text "\u22ef" (default-style))
-                 "..."))
+     `((... ,(λ ()
+               (if STIX?
+                   (basic-text "\u22ef" (default-style))
+                   (basic-text "..." (default-style)))))
        (hole "[]"))))
   
   (define-syntax (with-atomic-rewriter stx)
@@ -374,7 +380,7 @@
                      who
                      (length lst)
                      (apply string-append
-                            (format "~s" (car lst))
+                            (format "~s" fst)
                             (map (λ (x) (format " ~s" x)) (cdr lst)))))
             (values fst snd))
           (values fst (blank)))))
@@ -477,7 +483,7 @@
           (make-pict-token col col-span (blank))
           (let ([str (apply string (build-list col-span (λ (x) #\space)))])
             (if unquoted?
-                (make-pict-token col col-span (pink-background ((current-text) str 'modern (default-font-size))))
+                (make-pict-token col col-span (pink-background ((current-text) str pink-code-font (default-font-size))))
                 (make-string-token col col-span str (default-style))))))
     
     (define (handle-loc-wrapped lw)
@@ -679,7 +685,6 @@
       [(pict-token? tok) (pict-token-pict tok)]
       [else (error 'token->pict "~s" tok)]))
   
-    
   (define (atom->tokens col span atom all-nts unquoted?)
     (cond
       [(pict? atom)
@@ -688,7 +693,7 @@
        (list (make-pict-token col span 
                               (pink-background 
                                ((current-text) (if (string? atom) atom (format "~a" atom))
-                                               'modern
+                                               pink-code-font
                                                (default-font-size)))))]
       [(and (symbol? atom)
             (regexp-match #rx"^([^_^]*)_([^^]*)\\^?(.*)$" (symbol->string atom)))
@@ -702,7 +707,7 @@
                     (make-pict-token (+ col span) 0 sub+sup)))])]
       [(or (memq atom all-nts)
            (memq atom '(number variable variable-except variable-not-otherwise-mentioned)))
-       (list (non-terminal->token col span (format "~s" atom)))]
+       (list (non-terminal->token col span (symbol->string atom)))]
       [(symbol? atom)
        (list (or (rewrite-atomic col span atom literal-style)
                  (make-string-token col span (symbol->string atom) (literal-style))))]
@@ -746,7 +751,7 @@
 
   (define (basic-text str style) ((current-text) str style (default-font-size)))
   (define (non-terminal str) ((current-text) str (non-terminal-style) (default-font-size)))
-  (define (unksc str) (pink-background ((current-text) str 'modern (default-font-size))))
+  (define (unksc str) (pink-background ((current-text) str pink-code-font (default-font-size))))
   (define non-terminal-style (make-parameter '(italic . roman)))
   (define non-terminal-subscript-style (make-parameter `(subscript . ,(non-terminal-style))))
   (define non-terminal-superscript-style (make-parameter `(superscript . ,(non-terminal-style))))

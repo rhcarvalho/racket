@@ -1,6 +1,6 @@
 /*
   Racket
-  Copyright (c) 2004-2011 PLT Scheme Inc.
+  Copyright (c) 2004-2012 PLT Scheme Inc.
   Copyright (c) 1995-2001 Matthew Flatt
 
     This library is free software; you can redistribute it and/or
@@ -447,13 +447,17 @@ static intptr_t sch_vsprintf(char *s, intptr_t maxlen, const char *msg, va_list 
 		es = "Unknown error";
 #else
 # ifdef DOS_FILE_SYSTEM
-	      char mbuf[256];
+	      wchar_t mbuf[256];
+              int len;
 	      if ((type != 'e') && !es) {
-		if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL,
-				  en, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-				  mbuf, 255, NULL)) {
+		if ((len = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, NULL,
+                                          en, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                                          mbuf, 255, NULL))) {
 		  int i;
-		  es = mbuf;
+                  i = scheme_utf8_encode((const unsigned int *)mbuf, 0, len, NULL, 0, 1);
+                  es = (char *)scheme_malloc_atomic(i + 1);
+                  (void)scheme_utf8_encode((const unsigned int *)mbuf, 0, len, es, 0, 1);
+                  es[i] = 0;
 		  /* Remove newlines: */
 		  for (i = strlen(es) - 1; i > 0; i--) {
 		    if (isspace(es[i]))
@@ -1397,12 +1401,18 @@ void scheme_wrong_type(const char *name, const char *expected,
   intptr_t slen;
   int isres = 0;
   GC_CAN_IGNORE char *isress = "argument";
+  GC_CAN_IGNORE char *isgiven = "given";
 
   o = argv[which < 0 ? 0 : which];
   if (argc < 0) {
     argc = -argc;
     isress = "result";
+    isgiven = "received";
     isres = 1;
+  }
+  if (which == -2) {
+    isress = "value";
+    isgiven = "received";
   }
 
   s = scheme_make_provided_string(o, 1, &slen);
@@ -1410,10 +1420,11 @@ void scheme_wrong_type(const char *name, const char *expected,
   if ((which < 0) || (argc == 1))
     scheme_raise_exn(MZEXN_FAIL_CONTRACT,
 		     "%s: expect%s %s of type <%s>; "
-		     "given %t",
+		     "%s: %t",
 		     name, 
 		     (which < 0) ? "ed" : "s",
-		     isress, expected, s, slen);
+		     isress, expected, isgiven,
+                     s, slen);
   else {
     char *other;
     intptr_t olen;
@@ -3683,7 +3694,6 @@ void scheme_init_exn(Scheme_Env *env)
   for (i = 0; i < MZEXN_OTHER; i++) {
     if (exn_table[i].count) {
       Scheme_Object **values;
-      int sp;
 
       values = scheme_make_struct_values(exn_table[i].type,
 					 exn_table[i].names,
@@ -3694,8 +3704,6 @@ void scheme_init_exn(Scheme_Env *env)
 					  values[j],
 					  env);
       }
-
-      sp = exn_table[i].super_pos;
     }
   }
 

@@ -62,8 +62,6 @@ GRACKETOBJECTS = grmain.@LTO@
 
 RACKETDEPS = ../racket/libracket.@LIBSFX@ ../racket/libmzgc.@LIBSFX@
 
-INSTALLDEST=/home/scheme/plt
-
 MRSTATIC = 
 MRSTATIC_STUB =
 
@@ -130,7 +128,6 @@ ee-main:
 clean:
 	rm -f *.@LTO@ *.d core gracket gracket3m
 	rm -f gc2/*.@LTO@ gc2/xsrc/* gc2/macxsrc/* gc2/*.d gc2/*.dd
-	rm -rf gc2/xform-collects
 
 ICP=@ICP@
 BUILDINFO="$(DESTDIR)$(libpltdir)/buildinfo"

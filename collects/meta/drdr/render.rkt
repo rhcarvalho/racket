@@ -153,14 +153,21 @@
                   ".." ,(substring end-commit 0 8))))
        ,@(append-map
           (match-lambda
-            [(struct git-merge (hash author date msg from to))
+            [(or (and (struct git-merge (hash author date msg from to))
+                      (app (λ (x) #f) branch))
+                 (struct git-merge* (branch hash author date msg from to)))
              ; Don't display these "meaningless" commits
              empty]
-            [(struct git-diff (hash author date msg mfiles))
+            [(or (and (struct git-diff (hash author date msg mfiles))
+                      (app (λ (x) #f) branch))
+                 (struct git-diff* (branch hash author date msg mfiles)))
              (define cg-id (symbol->string (gensym 'changes)))
              (define ccss-id
                (symbol->string (gensym 'changes)))
-             `((tr 
+             `(,@(if branch
+                     (list `(tr ([class "branch"]) (td "Branch:") (td ,branch)))
+                     empty)
+               (tr 
                 ([class "hash"])
                 (td "Commit:")
                 (td 
@@ -649,7 +656,7 @@
                                    @p{The timing files are a list of S-expressions. Their grammar is: @code{(push duration ((cpu real gc) ...))} where @code{push} is an integer, @code{duration} is an inexact millisecond, and @code{cpu}, @code{real}, and @code{gc} are parsed from the @code{time-apply} function.}
                                    
                                    @h1{Why are some pushes missing?}
-                                   @p{Some pushes are missing because they only modify branches. Only pushes that change the @code{master} branch are tested.}
+                                   @p{Some pushes are missing because they only modify branches. Only pushes that change the @code{master} or @code{release} branch are tested.}
                                    
                                    @h1{How do I make the most use of DrDr?}
                                    @p{So DrDr can be effective with all testing packages and untested code, it only pays attention to error output and non-zero exit codes. You can make the most of this strategy by ensuring that when your tests are run successfully they have no STDERR output and exit cleanly, but have both when they fail.}
@@ -679,7 +686,7 @@
 (define log->committer+title 
   (match-lambda
     [(struct git-push (num author commits))
-     (define lines (append-map (λ (c) (if (git-merge? c) empty (git-commit-msg c))) commits))
+     (define lines (append-map (λ (c) (if (git-merge? c) empty (git-commit-msg* c))) commits))
      (define title
        (if (empty? lines)
            ""
@@ -692,6 +699,21 @@
                (svn-date->nice-date date)
                commit-msg))
      (values author title)]))
+
+(define (log->branches log)
+  (match-define (struct git-push (num author commits)) log)
+  (apply string-append
+         (add-between
+          (remove-duplicates 
+           (for/list ([c (in-list commits)])
+                     (format "branch-~a"
+                             (regexp-replace*
+                              "/"
+                              (if (git-commit*? c)
+                                  (git-commit*-branch c)
+                                  "refs/heads/master")
+                              "-"))))
+          " ")))
 
 (require web-server/servlet-env
          web-server/http
@@ -751,7 +773,8 @@
                              (define-values (committer title)
                                (log->committer+title log))
                              (define url (log->url log))
-                             `(tr ([class "dir"]
+                             `(tr ([class ,(format "dir ~a"
+                                                   (log->branches log))]
                                    [title ,title])
                                   (td (a ([href ,url]) ,name))
                                   (td ([class "building"] [colspan "6"])
@@ -769,7 +792,8 @@
                                (define mtime 
                                  (file-or-directory-modify-seconds log-pth))
                                
-                               `(tr ([class "dir"]
+                               `(tr ([class ,(format "dir ~a"
+                                                     (log->branches log))]
                                      [title ,title])
                                     (td (a ([href "#"]) ,name))
                                     (td ([class "building"] [colspan "6"])
@@ -793,7 +817,8 @@
                                                    stderr responsible-party changes))
                                     (define abs-dur (- end start))
                                     
-                                    `(tr ([class "dir"]
+                                    `(tr ([class ,(format "dir ~a"
+                                                          (log->branches log))]
                                           [title ,title]
                                           [onclick ,(format "document.location = ~S" url)])
                                          (td (a ([href ,url]) ,name))

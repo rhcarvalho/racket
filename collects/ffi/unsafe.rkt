@@ -93,7 +93,8 @@
          ffi-lib? ffi-lib-name)
 (define (get-ffi-lib name [version/s ""]
 		     #:fail [fail #f]
-		     #:get-lib-dirs [get-lib-dirs get-lib-search-dirs])
+		     #:get-lib-dirs [get-lib-dirs get-lib-search-dirs]
+                     #:global? [global? #f])
   (cond
    [(not name) (ffi-lib name)] ; #f => NULL => open this executable
    [(not (or (string? name) (path? name)))
@@ -123,7 +124,7 @@
 				 (string-append name0 "." lib-suffix v)
 				 (string-append name0 v "." lib-suffix))))
 		       versions)]
-	   [ffi-lib*  (lambda (name) (ffi-lib name #t))])
+	   [ffi-lib*  (lambda (name) (ffi-lib name #t global?))])
       (or ;; try to look in our library paths first
        (and (not absolute?)
 	    (ormap (lambda (dir)
@@ -145,8 +146,8 @@
        (if fail
 	   (fail)
 	   (if (pair? names)
-	       (ffi-lib (car names))
-	       (ffi-lib name0)))))]))
+	       (ffi-lib (car names) #f global?)
+	       (ffi-lib name0 #f global?)))))]))
 
 (define (get-ffi-lib-internal x)
   (if (ffi-lib? x) x (get-ffi-lib x)))
@@ -1577,22 +1578,40 @@
                regexp-replace regexp-replace*)
              (caar rs) str (cadar rs)) (cdr rs)))))
 
-;; A facility for running finalizers using executors. The "stubborn" kind
-;; of will executor is provided by '#%foreign, and it doesn't get GC'ed if
-;; any finalizers are attached to it (while the normal kind can get GCed
-;; even if a thread that is otherwise inaccessible is blocked on the executor).
-;; Also it registers level-2 finalizers (which are run after non-late weak
-;; boxes are cleared).
-(define killer-executor (make-stubborn-will-executor))
 (define killer-thread #f)
 
-(define* (register-finalizer obj finalizer)
-  (unless killer-thread
-    (let ([priviledged-custodian ((get-ffi-obj 'scheme_make_custodian #f (_fun _pointer -> _scheme)) #f)])
-      (set! killer-thread
-            (parameterize ([current-custodian priviledged-custodian]
-                           ;; don't hold onto the namespace in the finalizer thread:
-                           [current-namespace (make-base-empty-namespace)])
-              (thread (lambda ()
-                        (let loop () (will-execute killer-executor) (loop))))))))
-  (will-register killer-executor obj finalizer))
+(define* register-finalizer 
+  ;; We bind `killer-executor' as a location variable, instead of a module
+  ;; variable, so that the loop for `killer-thread' doesn't have a namespace
+  ;; (via a prefix) in its continuation:
+  (let ([killer-executor (make-stubborn-will-executor)])
+    ;; The "stubborn" kind of will executor (for `killer-executor') is
+    ;; provided by '#%foreign, and it doesn't get GC'ed if any
+    ;; finalizers are attached to it (while the normal kind can get
+    ;; GCed even if a thread that is otherwise inaccessible is blocked
+    ;; on the executor).  Also it registers level-2 finalizers (which
+    ;; are run after non-late weak boxes are cleared).
+    (lambda (obj finalizer)
+      (unless killer-thread
+        ;; We need to make a thread that runs in a privildged custodian and
+        ;; that doesn't retain the current namespace --- either directly
+        ;; or indirectly through some parameter setting in the current thread.
+        (let ([priviledged-custodian ((get-ffi-obj 'scheme_make_custodian #f (_fun _pointer -> _scheme)) #f)]
+              [no-cells ((get-ffi-obj 'scheme_empty_cell_table #f (_fun -> _gcpointer)))]
+              [min-config ((get-ffi-obj 'scheme_minimal_config #f (_fun -> _gcpointer)))]
+              [thread/details (get-ffi-obj 'scheme_thread_w_details #f (_fun _scheme 
+                                                                             _gcpointer ; config
+                                                                             _gcpointer ; cells
+                                                                             _pointer ; break_cell
+                                                                             _scheme ; custodian
+                                                                             _int ; suspend-to-kill?
+                                                                             -> _scheme))])
+          (set! killer-thread
+                (thread/details (lambda ()
+                                  (let loop () (will-execute killer-executor) (loop)))
+                                min-config
+                                no-cells
+                                #f ; default break cell
+                                priviledged-custodian
+                                0))))
+      (will-register killer-executor obj finalizer))))

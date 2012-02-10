@@ -1,6 +1,6 @@
 /*
   Racket
-  Copyright (c) 2004-2011 PLT Scheme Inc.
+  Copyright (c) 2004-2012 PLT Scheme Inc.
   Copyright (c) 2000-2001 Matthew Flatt
 
     This library is free software; you can redistribute it and/or
@@ -88,6 +88,7 @@ static Scheme_Object *char_ready_p (int, Scheme_Object *[]);
 static Scheme_Object *byte_ready_p (int, Scheme_Object *[]);
 static Scheme_Object *peeked_read(int argc, Scheme_Object *argv[]);
 static Scheme_Object *progress_evt (int argc, Scheme_Object *argv[]);
+static Scheme_Object *closed_evt (int argc, Scheme_Object *argv[]);
 static Scheme_Object *write_bytes_avail_evt(int argc, Scheme_Object *argv[]);
 static Scheme_Object *write_special_evt(int argc, Scheme_Object *argv[]);
 static Scheme_Object *sch_write (int, Scheme_Object *[]);
@@ -143,6 +144,7 @@ ROSYM static Scheme_Object *cr_symbol;
 ROSYM static Scheme_Object *lf_symbol;
 ROSYM static Scheme_Object *crlf_symbol;
 ROSYM static Scheme_Object *module_symbol;
+ROSYM static Scheme_Object *string_symbol;
 
 READ_ONLY static Scheme_Object *default_read_handler;
 READ_ONLY static Scheme_Object *default_display_handler;
@@ -190,6 +192,7 @@ scheme_init_port_fun(Scheme_Env *env)
   REGISTER_SO(lf_symbol);
   REGISTER_SO(crlf_symbol);
   REGISTER_SO(module_symbol);
+  REGISTER_SO(string_symbol);
 
   any_symbol      = scheme_intern_symbol("any");
   any_one_symbol  = scheme_intern_symbol("any-one");
@@ -197,6 +200,7 @@ scheme_init_port_fun(Scheme_Env *env)
   lf_symbol       = scheme_intern_symbol("linefeed");
   crlf_symbol     = scheme_intern_symbol("return-linefeed");
   module_symbol   = scheme_intern_symbol("module");
+  string_symbol   = scheme_intern_symbol("string");
 
   scheme_write_proc   = scheme_make_noncm_prim(sch_write, "write",    1, 2);
   scheme_display_proc = scheme_make_noncm_prim(display,   "display",  1, 2);
@@ -299,6 +303,7 @@ scheme_init_port_fun(Scheme_Env *env)
   GLOBAL_NONCM_PRIM("write-byte",                     write_byte,                     1, 2, env);
   GLOBAL_NONCM_PRIM("port-commit-peeked",             peeked_read,                    3, 4, env);
   GLOBAL_NONCM_PRIM("port-progress-evt",              progress_evt,                   0, 1, env);
+  GLOBAL_NONCM_PRIM("port-closed-evt",                closed_evt,                     0, 1, env);
   GLOBAL_NONCM_PRIM("write-bytes-avail-evt",          write_bytes_avail_evt,          1, 4, env);
   GLOBAL_NONCM_PRIM("write-special-evt",              write_special_evt,              2, 2, env);
   GLOBAL_NONCM_PRIM("port-read-handler",              port_read_handler,              1, 2, env);
@@ -314,7 +319,8 @@ scheme_init_port_fun(Scheme_Env *env)
   GLOBAL_NONCM_PRIM("port-count-lines!",              port_count_lines,               1, 1, env);
           
   p = scheme_make_folding_prim(eof_object_p, "eof-object?", 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant("eof-object?", p, env);
 
   scheme_add_global_constant("write",   scheme_write_proc,    env);
@@ -579,7 +585,7 @@ scheme_make_sized_byte_string_input_port(const char *str, intptr_t len)
 
   ip = scheme_make_input_port(scheme_string_input_port_type,
 			      make_indexed_string(str, len),
-			      scheme_intern_symbol("string"),
+			      string_symbol,
 			      string_get_bytes,
 			      string_peek_bytes,
 			      scheme_progress_evt_via_get,
@@ -725,7 +731,7 @@ scheme_get_string_output(Scheme_Object *port)
 }
 
 /*========================================================================*/
-/*                 "user" input ports (created from Scheme)               */
+/*                 "user" input ports (created from Racket)               */
 /*========================================================================*/
 
 typedef struct User_Input_Port {
@@ -1223,7 +1229,7 @@ user_input_buffer_mode(Scheme_Port *p, int mode)
 }
 
 /*========================================================================*/
-/*                 "user" output ports (created from Scheme)              */
+/*                 "user" output ports (created from Racket)              */
 /*========================================================================*/
 
 typedef struct User_Output_Port {
@@ -2143,7 +2149,7 @@ static int pipe_output_p(Scheme_Object *o)
 }
 
 /*========================================================================*/
-/*                    Scheme functions and helpers                        */
+/*                    Racket functions and helpers                        */
 /*========================================================================*/
 
 static Scheme_Object *
@@ -2435,12 +2441,17 @@ static Scheme_Object *
 open_input_byte_string (int argc, Scheme_Object *argv[])
 {
   Scheme_Object *o;
+  intptr_t len;
 
   if (!SCHEME_BYTE_STRINGP(argv[0]))
     scheme_wrong_type("open-input-bytes", "byte string", 0, argc, argv);
 
+  len = SCHEME_BYTE_STRTAG_VAL(argv[0]);
+  if (SCHEME_IMMUTABLEP(argv[0]))
+    len = -len; /* negative means that the string doesn't have to be copied */
+
   o = scheme_make_sized_byte_string_input_port(SCHEME_BYTE_STR_VAL(argv[0]),
-					       SCHEME_BYTE_STRTAG_VAL(argv[0]));
+					       len);
   if (argc > 1)
     ((Scheme_Input_Port *)o)->name = argv[1];
 
@@ -2458,7 +2469,7 @@ open_input_char_string (int argc, Scheme_Object *argv[])
   o = scheme_char_string_to_byte_string(argv[0]);
 
   o = scheme_make_sized_byte_string_input_port(SCHEME_BYTE_STR_VAL(o),
-					       SCHEME_BYTE_STRTAG_VAL(o));
+					       -SCHEME_BYTE_STRTAG_VAL(o));
 
   if (argc > 1)
     ((Scheme_Input_Port *)o)->name = argv[1];
@@ -3013,10 +3024,12 @@ static Scheme_Object *
 do_read_line (int as_bytes, const char *who, int argc, Scheme_Object *argv[])
 {
   Scheme_Object *port;
-  int ch;
+  int ch, ascii;
   int crlf = 0, cr = 0, lf = 1;
   char *buf, *oldbuf, onstack[32];
   intptr_t size = 31, oldsize, i = 0;
+  Scheme_Input_Port *ip;
+  Scheme_Get_String_Fun gs;
 
   if (argc && !SCHEME_INPUT_PORTP(argv[0]))
     scheme_wrong_type(who, "input-port", 0, argc, argv);
@@ -3051,8 +3064,31 @@ do_read_line (int as_bytes, const char *who, int argc, Scheme_Object *argv[])
 
   buf = onstack;
 
+  ip = scheme_input_port_record(port);
+  gs = ip->get_string_fun;
+  ascii = 1;
+      
   while (1) {
-    ch = scheme_get_byte(port);
+    if (!ip->slow) {
+      /* `read-line' seems important enough to inline the `read-byte' fast path: */
+      char s[1];
+      
+      ch = gs(ip, s, 0, 1, 0, NULL);
+
+      if (ch == SCHEME_SPECIAL) {
+        scheme_bad_time_for_special(who, port);
+      } else if (ch) {
+        if (ip->p.position >= 0)
+          ip->p.position++;
+
+        if (ch != EOF)
+          ch = ((unsigned char *)s)[0];
+      } else
+        ch = scheme_get_byte(port);
+    } else {
+      ch = scheme_get_byte(port);
+    }
+
     if (ch == EOF) {
       if (!i)
 	return scheme_eof;
@@ -3086,14 +3122,26 @@ do_read_line (int as_bytes, const char *who, int argc, Scheme_Object *argv[])
       memcpy(buf, oldbuf, oldsize);
     }
     buf[i++] = ch;
+    if (ch > 127) ascii = 0;
   }
 
   if (as_bytes) {
     buf[i] = '\0';
     return scheme_make_sized_byte_string(buf, i, buf == (char *)onstack);
   } else {
-    buf[i] = '\0';
-    return scheme_make_sized_utf8_string(buf, i);
+    int j;
+    if (ascii) {
+      mzchar *us;
+      us = scheme_malloc_atomic(sizeof(mzchar) * (i + 1));
+      for (j = 0; j < i; j++) {
+        us[j] = ((unsigned char *)buf)[j];
+      }
+      us[i] = 0;
+      return scheme_make_sized_offset_char_string(us, 0, i, 0);
+    } else {
+      buf[i] = '\0';
+      return scheme_make_sized_utf8_string(buf, i);
+    }
   }
 }
 
@@ -3425,6 +3473,48 @@ progress_evt(int argc, Scheme_Object *argv[])
     return NULL;
   } else
     return v;
+}
+
+static Scheme_Object *make_closed_evt(int already_closed)
+{
+  Scheme_Object *evt, *sema;
+
+  sema = scheme_make_sema(0);
+  if (already_closed)
+    scheme_post_sema_all(sema);
+  evt = scheme_alloc_small_object();
+  evt->type = scheme_port_closed_evt_type;
+  SCHEME_PTR_VAL(evt) = sema;
+
+  return evt;
+}
+
+static Scheme_Object *
+closed_evt(int argc, Scheme_Object *argv[])
+{
+  Scheme_Object *v = argv[0];
+  if (SCHEME_INPUT_PORTP(v)) {
+    Scheme_Input_Port *ip;
+    ip = scheme_input_port_record(v);
+    if (!ip->closed_evt) {
+      v = make_closed_evt(ip->closed);
+      ip->closed_evt = v;
+    } else
+      v = ip->closed_evt;
+    return v;
+  } else if (SCHEME_OUTPUT_PORTP(v)) {
+    Scheme_Output_Port *op;
+    op = scheme_output_port_record(v);
+    if (!op->closed_evt) {
+      v = make_closed_evt(op->closed);
+      op->closed_evt = v;
+    } else
+      v = op->closed_evt;
+    return v;
+  } else {
+    scheme_wrong_type("port-closed-evt", "input-port or output-port", 0, argc, argv);
+    return NULL;
+  }
 }
 
 static Scheme_Object *

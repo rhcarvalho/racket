@@ -175,15 +175,16 @@
   (unless (or (module-path? module-path) (path? module-path))
     (raise-type-error who "module-path or path" module-path))
   (unless (symbol? function)
-    (raise-type-error who "symbol" module-path))
+    (raise-type-error who "symbol" function))
   (unless (or (not in) (input-port? in))
     (raise-type-error who "input-port or #f" in))
   (unless (or (not out) (output-port? out))
     (raise-type-error who "output-port or #f" out))
   (unless (or (not err) (output-port? err) (eq? err 'stdout))
     (raise-type-error who "output-port, #f, or 'stdout" err))
-  (when (and (pair? module-path) (eq? (car module-path) 'quote))
-    (raise-mismatch-error who "not a filesystem module-path: " module-path))
+  (when (and (pair? module-path) (eq? (car module-path) 'quote)
+             (not (module-predefined? module-path)))
+    (raise-mismatch-error who "not a filesystem or predefined module-path: " module-path))
   (when (and (input-port? in) (port-closed? in))
     (raise-mismatch-error who "input port is closed: " in))
   (when (and (output-port? out) (port-closed? out))
@@ -218,6 +219,17 @@
                 (and (not out) outr)
                 (and (not err) errr)))]))
 
+
+(define-for-syntax (modpath->string modpath)
+  (cond 
+    [(equal? modpath #f)
+     (number->string (current-inexact-milliseconds))]
+    [else
+      (define name (resolved-module-path-name modpath))
+      (cond 
+        [(symbol? name) (symbol->string name)]
+        [(path? name) (path->string name)])]))
+
 (define-for-syntax (place-form _in _out _err _start-place-func stx orig-stx)
   (syntax-case stx ()
     [(who ch body1 body ...)
@@ -225,14 +237,19 @@
          ;; when a `place' form is the only thing in a module mody:
          #`(begin #,stx)
          ;; normal case:
-         (begin
+         (let ()
            (unless (syntax-transforming-module-expression?)
              (raise-syntax-error #f "can only be used in a module" stx))
            (unless (identifier? #'ch)
              (raise-syntax-error #f "expected an identifier" stx #'ch))
+           (define func-name-stx 
+             (datum->syntax stx 
+               (string->symbol 
+                 (string-append "place/anon" 
+                                (modpath->string (current-module-declare-name))))))
            (with-syntax ([internal-def-name
                           (syntax-local-lift-expression #'(lambda (ch) body1 body ...))]
-                         [func-name (generate-temporary #'place/anon)]
+                         [func-name (generate-temporary func-name-stx)]
                          [in _in]
                          [out _out]
                          [err _err]
@@ -261,6 +278,7 @@
     (resolved-module-path-name
      (variable-reference->resolved-module-path
       vr)))
-  (when (symbol? name)
-     (error who "the current module-path-name is not a file path"))
-  (start-place-func who name func-name in out err))
+  (when (and (symbol? name)
+             (not (module-predefined? `(quote ,name))))
+     (error who "the enclosing module's resolved name is not a path or predefined"))
+  (start-place-func who (if (symbol? name) `(quote ,name) name) func-name in out err))

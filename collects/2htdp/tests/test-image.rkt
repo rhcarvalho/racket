@@ -122,6 +122,25 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+;; predicates
+;;
+
+(test (mode? "outline") => #t)
+(test (mode? 'outline) => #t)
+(test (mode? 'oooutlineh) => #f)
+(test (pen-style? 'solid) => #t)
+(test (pen-style? 'solidd) => #f)
+(test (pen-cap? 'round) => #t)
+(test (pen-cap? 'roound) => #f)
+(test (pen-join? 'round) => #t)
+(test (pen-join? 'roound) => #f)
+(test (x-place? 'left) => #t)
+(test (x-place? 'zuo) => #f)
+(test (y-place? 'top) => #t)
+(test (y-place? 'shang) => #f)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 ;; circle vs ellipse
 ;;
 
@@ -1860,12 +1879,12 @@
 (test (pinhole-y (flip-vertical (put-pinhole 1 2 (rectangle 10 20 'solid 'red))))
       =>
       18)
-(test (pinhole-x (flip-horizontal (put-pinhole 1 2 (rectangle 10 20 'solid 'red))))
-      =>
-      9.0)
-(test (pinhole-y (flip-horizontal (put-pinhole 1 2 (rectangle 10 20 'solid 'red))))
-      =>
-      2.0)
+(check-= (pinhole-x (flip-horizontal (put-pinhole 1 2 (rectangle 10 20 'solid 'red))))
+         9.0
+         0)
+(check-= (pinhole-y (flip-horizontal (put-pinhole 1 2 (rectangle 10 20 'solid 'red))))
+         2.0
+         0)
 (test (equal? (center-pinhole (rectangle 10 12 'solid 'blue))
               (rectangle 10 12 'solid 'blue))
       =>

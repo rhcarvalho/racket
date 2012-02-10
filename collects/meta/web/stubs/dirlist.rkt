@@ -7,11 +7,13 @@
 (define-context "stubs/dirlist" #:resources dnld:the-resources)
 
 (define header+footer
-  (delay (regexp-split #rx"{{{BODY}}}"
-                       (xml->string @page[#:id 'browse-downloads
-                                          #:html-only #t
-                                          #:part-of 'download
-                                          "{{{BODY}}}"]))))
+  (lazy (regexp-split #rx"{{{BODY}}}"
+                      (xml->string @page[#:id 'browse-downloads
+                                         #:html-only #t
+                                         #:part-of 'download
+                                         "{{{BODY}}}"]))))
 
-(define header @plain[#:file "header.html" (car  (force header+footer))])
-(define footer @plain[#:file "footer.html" (cadr (force header+footer))])
+(define header
+  @plain[#:file "header.html" #:newline #f (car  (force header+footer))])
+(define footer
+  @plain[#:file "footer.html" #:newline #f (cadr (force header+footer))])

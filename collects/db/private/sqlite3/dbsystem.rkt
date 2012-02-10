@@ -1,7 +1,9 @@
 #lang racket/base
 (require racket/class
-         "../generic/interfaces.rkt")
-(provide dbsystem)
+         "../generic/interfaces.rkt"
+         "../generic/common.rkt")
+(provide dbsystem
+         classify-sl-sql)
 
 (define sqlite3-dbsystem%
   (class* object% (dbsystem<%>)
@@ -34,3 +36,30 @@
               (bytes? param))
     (error/no-convert fsym "SQLite" "parameter" param))
   param)
+
+;; ========================================
+
+;; SQL "parsing"
+;; We just care about detecting commands that affect transaction status.
+
+;; classify-sl-sql : string [nat] -> symbol/#f
+(define classify-sl-sql
+  (make-sql-classifier
+   '(;; Statements that do not invalidate the statement cache
+     ("SELECT" select)
+     ("INSERT" insert)
+     ("UPDATE" update)
+     ("DELETE" delete)
+
+     ;; Explicit transaction commands
+     ("ROLLBACK TRANSACTION TO"  rollback-savepoint)
+     ("ROLLBACK TO"       rollback-savepoint)
+     ("RELEASE"           release-savepoint)
+     ("SAVEPOINT"         savepoint)
+     ;; Note: SAVEPOINT allowed outside of transaction! (but that's okay)
+
+     ("BEGIN"             start)
+     ("COMMIT"            commit)
+     ("END"               commit)
+     ("ROLLBACK"          rollback) ;; Note: after ROLLBACK TO, etc
+     )))

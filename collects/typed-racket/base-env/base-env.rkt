@@ -34,7 +34,8 @@
 
 ;Section 9.2
 
-[raise (Univ . -> . (Un))]
+[raise (cl->* (Univ . -> . (Un))
+	      (Univ Univ . -> . (Un)))]
 
 [error
  (cl->* (-> Sym (Un))
@@ -175,19 +176,33 @@
               (cl->*
                (->acc (list (-pair a (-lst b))) a (list -car))
                (->* (list (-lst a)) a)))]
-[second (-poly (a b c)
-               (cl->* [->acc (list (-pair a (-pair b (-lst c)))) b (list -car -cdr)]
+[second (-poly (a r t)
+               (cl->* [->acc (list (-lst* a r #:tail (-lst t))) r (list -car -cdr)]
                       [->* (list (-lst a)) a]))]
-[third (-poly (a b c d)
-              (cl->* [->acc (list (-pair a (-pair b (-pair c (-lst d))))) c (list -car -cdr -cdr)]
+[third (-poly (a b r t)
+              (cl->* [->acc (list (-lst* a b r #:tail (-lst t))) r (list -car -cdr -cdr)]
                      [->* (list (-lst a)) a]))]
-[fourth  (-poly (a) ((-lst a) . -> .  a))]
-[fifth   (-poly (a) ((-lst a) . -> .  a))]
-[sixth   (-poly (a) ((-lst a) . -> .  a))]
-[seventh (-poly (a) ((-lst a) . -> .  a))]
-[eighth  (-poly (a) ((-lst a) . -> .  a))]
-[ninth   (-poly (a) ((-lst a) . -> .  a))]
-[tenth   (-poly (a) ((-lst a) . -> .  a))]
+[fourth  (-poly (a b c r t)
+              (cl->* [->acc (list (-lst* a b c r #:tail (-lst t))) r (list -car -cdr -cdr -cdr)]
+                     [->* (list (-lst a)) a]))]
+[fifth   (-poly (a b c d r t)
+              (cl->* [->acc (list (-lst* a b c d r #:tail (-lst t))) r (list -car -cdr -cdr -cdr -cdr)]
+                     [->* (list (-lst a)) a]))]
+[sixth   (-poly (a b c d e r t)
+              (cl->* [->acc (list (-lst* a b c d e r #:tail (-lst t))) r (list -car -cdr -cdr -cdr -cdr -cdr)]
+                     [->* (list (-lst a)) a]))]
+[seventh (-poly (a b c d e f r t)
+              (cl->* [->acc (list (-lst* a b c d e f r #:tail (-lst t))) r (list -car -cdr -cdr -cdr -cdr -cdr -cdr)]
+                     [->* (list (-lst a)) a]))]
+[eighth  (-poly (a b c d e f g r t)
+              (cl->* [->acc (list (-lst* a b c d e f g r #:tail (-lst t))) r (list -car -cdr -cdr -cdr -cdr -cdr -cdr -cdr)]
+                     [->* (list (-lst a)) a]))]
+[ninth   (-poly (a b c d e f g h r t)
+              (cl->* [->acc (list (-lst* a b c d e f g h r #:tail (-lst t))) r (list -car -cdr -cdr -cdr -cdr -cdr -cdr -cdr -cdr)]
+                     [->* (list (-lst a)) a]))]
+[tenth   (-poly (a b c d e f g h i r t)
+              (cl->* [->acc (list (-lst* a b c d e f g h i r #:tail (-lst t))) r (list -car -cdr -cdr -cdr -cdr -cdr -cdr -cdr -cdr -cdr)]
+                     [->* (list (-lst a)) a]))]
 [rest (-poly (a b)
              (cl->*
               (->acc (list (-pair a (-lst b))) (-lst b) (list -cdr))
@@ -390,7 +405,7 @@
                      [((a b c . -> . c) c (-lst a) (-lst b)) c]
                      [((a b c d . -> . d) d (-lst a) (-lst b) (-lst d)) d]))]
 [filter (-poly (a b) (cl->*
-                      ((make-pred-ty (list a) Univ b)
+                      ((asym-pred a -Boolean (-FS (-filter b 0) -top))
                        (-lst a)
                        . -> .
                        (-lst b))
@@ -495,7 +510,7 @@
 [kernel:memq (-poly (a) (-> a (-lst a) (-opt (-lst a))))]
 [memv (-poly (a) (-> a (-lst a) (-opt (-lst a))))]
 [kernel:memv (-poly (a) (-> a (-lst a) (-opt (-lst a))))]
-[memf (-poly (a) ((a . -> . B) (-lst a) . -> . (-opt (-lst a))))]
+[memf (-poly (a) ((a . -> . Univ) (-lst a) . -> . (-opt (-lst a))))]
 [member (-poly (a) (a (-lst a) . -> . (-opt (-lst a))))]
 [kernel:member (-poly (a) (a (-lst a) . -> . (-opt (-lst a))))]
 [findf (-poly (a) ((a . -> . B) (-lst a) . -> . (-opt a)))]
@@ -1383,11 +1398,6 @@
 [last-pair (-poly (a) ((-mu x (Un a (-val '()) (-pair a x)))
                        . -> .
                        (Un (-pair a a) (-pair a (-val '())))))]
-[remove-duplicates
- (-poly (a)
-        (cl->*
-         ((-lst a) . -> . (-lst a))
-         ((-lst a) (a a . -> . Univ) . -> . (-lst a))))]
 [append-map
  (-polydots (c a b) ((list ((list a) (b b) . ->... . (-lst c)) (-lst a))
                      ((-lst b) b) . ->... .(-lst c)))]

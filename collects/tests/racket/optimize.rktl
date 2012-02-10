@@ -5,6 +5,7 @@
 
 (require racket/flonum
          racket/fixnum
+         racket/unsafe/ops
          compiler/zo-parse)
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1345,11 +1346,65 @@
            (test-dropped cons-name 1 2)
            (test-dropped cons-name 1 2 3)
            (test-dropped cons-name 1)
-           (test-dropped cons-name))])
+           (unless (eq? cons-name 'list*)
+             (test-dropped cons-name)))])
     (test-multi 'list)
     (test-multi 'list*)
     (test-multi 'vector)
     (test-multi 'vector-immutable)))
+(test-comp `(let ([x 5])
+              (let ([y (list*)])
+                x))
+           5
+           #f)
+
+(let ([test-pred
+       (lambda (pred-name)
+         (test-comp `(lambda (z)
+                       (let ([x ',pred-name])
+                         (let ([y (,pred-name z)])
+                           x)))
+                    `(lambda (z) ',pred-name)))])
+  (test-pred 'pair?)
+  (test-pred 'mpair?)
+  (test-pred 'list?)
+  (test-pred 'box?)
+  (test-pred 'number?)
+  (test-pred 'real?)
+  (test-pred 'complex?)
+  (test-pred 'rational?)
+  (test-pred 'integer?)
+  (test-pred 'exact-integer?)
+  (test-pred 'exact-nonnegative-integer?)
+  (test-pred 'exact-positive-integer?)
+  (test-pred 'inexact-real?)
+  (test-pred 'fixnum?)
+  (test-pred 'flonum?)
+  (test-pred 'single-flonum?)
+  (test-pred 'null?)
+  (test-pred 'void?)
+  (test-pred 'symbol?)
+  (test-pred 'string?)
+  (test-pred 'bytes?)
+  (test-pred 'path?)
+  (test-pred 'char?)
+  (test-pred 'boolean?)
+  (test-pred 'chaperone?)
+  (test-pred 'impersonator?)
+  (test-pred 'procedure?)
+  (test-pred 'eof-object?)
+  (test-pred 'not))
+
+(let ([test-bin
+       (lambda (bin-name)
+         (test-comp `(lambda (z)
+                       (let ([x ',bin-name])
+                         (let ([y (,bin-name z z)])
+                           x)))
+                    `(lambda (z) ',bin-name)))])
+  (test-bin 'eq?)
+  (test-bin 'eqv?))
+
 
 ;; + fold to fixnum overflow, fx+ doesn't
 (test-comp `(module m racket/base
@@ -1364,6 +1419,65 @@
               (- (expt 2 31) 2))
            #f)
 
+;; don't duplicate an operation by moving it into a lambda':
+(test-comp '(lambda (x)
+              (let ([y (unsafe-flvector-length x)])
+                (let ([f (lambda () y)])
+                  (+ (f) (f)))))
+           '(lambda (x)
+              (+ (unsafe-flvector-length x) (unsafe-flvector-length x)))
+           #f)
+
+;; don't delay an unsafe car, because it might be space-unsafe
+(test-comp '(lambda (f x)
+              (let ([y (unsafe-car x)])
+                (f)
+                y))
+           '(lambda (f x)
+              (f)
+              (unsafe-car x))
+           #f)
+
+;; it's ok to delay `list', because there's no space-safety issue
+(test-comp '(lambda (f x)
+              (let ([y (list x)])
+                (f)
+                y))
+           '(lambda (f x)
+              (f)
+              (list x)))
+
+;; don't duplicate formerly once-used variable due to inlining
+(test-comp '(lambda (y)
+              (let ([q (unsafe-fl* y y)]) ; => q is known flonum
+                (let ([x (unsafe-fl* q q)]) ; can delay (but don't duplicate)
+                  (define (f z) (unsafe-fl+ z x))
+                  (if y
+                      (f 10)
+                      f))))
+           '(lambda (y)
+              (let ([q (unsafe-fl* y y)])
+                (let ([x (unsafe-fl* q q)])
+                  (define (f z) (unsafe-fl+ z x))
+                  (if y
+                      (unsafe-fl+ 10 x)
+                      f)))))
+;; double-check that previous test doesn't succeed due to copying
+(test-comp '(lambda (y)
+              (let ([q (unsafe-fl* y y)])
+                (let ([x (unsafe-fl* q q)])
+                  (define (f z) (unsafe-fl+ z x))
+                  (if y
+                      (unsafe-fl+ 10 x)
+                      f))))
+           '(lambda (y)
+              (let ([q (unsafe-fl* y y)])
+                (define (f z) (unsafe-fl+ z (unsafe-fl* q q)))
+                (if y
+                    (unsafe-fl+ 10 (unsafe-fl* q q))
+                    f)))
+           #f)
+
 ;; simple cross-module inlining
 (test-comp `(module m racket/base 
               (require racket/bool)
@@ -1371,6 +1485,102 @@
            `(module m racket/base 
               (require racket/bool)
               (list #t)))
+
+(test-comp `(module m racket/base 
+              (require racket/list)
+              empty?
+              (empty? 10))
+           `(module m racket/base 
+              (require racket/list)
+              empty? ; so that it counts as imported
+              (null? 10)))
+
+(module check-inline-request racket/base
+  (require racket/performance-hint)
+  (provide loop)
+  (begin-encourage-inline
+   (define loop
+     ;; large enough that the compiler wouldn't infer inlining:
+     (lambda (f n)
+       (let loop ([i n])
+         (if (zero? i)
+             10
+             (cons (f i) (loop (sub1 n)))))))))
+
+(test-comp `(module m racket/base 
+              (require 'check-inline-request)
+              loop
+              (loop list 1)) ; 1 is small enough to fully unroll
+           `(module m racket/base 
+              (require 'check-inline-request)
+              loop ; so that it counts as imported
+              (let ([f list]
+                    [n 1])
+                (let loop ([i n])
+                  (if (zero? i)
+                      10
+                      (cons (f i) (loop (sub1 n))))))))
+
+;; check omit & reorder possibilities for unsafe
+;; operations on mutable values:
+(let ()
+  (define (check-omit-ok expr [yes? #t])
+    ;; can omit:
+    (test-comp `(module m racket/base
+                  (require racket/unsafe/ops)
+                  (define (f x)
+                    (f x)))
+               `(module m racket/base
+                  (require racket/unsafe/ops)
+                  (define (f x)
+                    ,expr
+                    (f x)))
+               yes?)
+    ;; cannot reorder:
+    (test-comp `(module m racket/base
+                  (require racket/unsafe/ops)
+                  (define (f x)
+                    (let ([y ,expr])
+                      (vector-ref x x)
+                      (f x y))))
+               `(module m racket/base
+                  (require racket/unsafe/ops)
+                  (define (f x)
+                    (vector-ref x x)
+                    (f x ,expr)))
+               #f))
+  (map check-omit-ok
+       '((unsafe-vector-ref x x)
+         (unsafe-vector*-ref x x)
+         (unsafe-struct-ref x x)
+         (unsafe-struct*-ref x x)
+         (unsafe-mcar x)
+         (unsafe-mcdr x)
+         (unsafe-unbox x)
+         (unsafe-unbox* x)
+         (unsafe-bytes-ref x x)
+         (unsafe-string-ref x x)
+         (unsafe-flvector-ref x x)
+         (unsafe-fxvector-ref x x)
+         (unsafe-f64vector-ref x x)
+         (unsafe-s16vector-ref x x)
+         (unsafe-u16vector-ref x x)))
+  (map (lambda (x) (check-omit-ok x #f))
+       '((unsafe-vector-set! x x x)
+         (unsafe-vector*-set! x x x)
+         (unsafe-struct-set! x x x)
+         (unsafe-struct*-set! x x x)
+         (unsafe-set-mcar! x x)
+         (unsafe-set-mcdr! x x)
+         (unsafe-set-box! x x)
+         (unsafe-set-box*! x x)
+         (unsafe-bytes-set! x x x)
+         (unsafe-string-set! x x x)
+         (unsafe-flvector-set! x x x)
+         (unsafe-fxvector-set! x x x)
+         (unsafe-f64vector-set! x x x)
+         (unsafe-s16vector-set! x x x)
+         (unsafe-u16vector-set! x x x))))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Check bytecode verification of lifted functions
@@ -1663,6 +1873,43 @@
       (lambda ()
         (unc1))))
   (unc1))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Regression test related to the `let'-resolve pass:
+
+(module check-against-problem-in-let-resolver racket/base
+  (let-values (((fail2) 12))
+    (let ([debugger-local-bindings
+           (lambda ()
+             (case-lambda ((v) (set! fail2 v))))])
+      (let ([f3 (lambda ()
+                  (let ([debugger-local-bindings
+                         (lambda ()
+                           (debugger-local-bindings))])
+                    '3))])
+        (let ([debugger-local-bindings
+               (lambda ()
+                 (case-lambda ((v) (set! f3 v))))])
+          (f3))))))
+
+;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Make sure that certain lifting operations
+;;  do not lose track of flonum-ness of a variable:
+
+(let ([e '(let ([f (random)])
+            (define (s t)
+              (cons
+               (lambda () (s (fl+ t 1.0)))
+               (lambda () f)))
+            (s 0.0))]
+      [ns (make-base-namespace)]
+      [o (open-output-bytes)])
+  (parameterize ([current-namespace ns])
+    (namespace-require 'racket/flonum)
+    (write (compile e) o))
+  ;; bytecode validation can catch the relevant mistake:
+  (parameterize ([read-accept-compiled #t])
+    (read (open-input-bytes (get-output-bytes o)))))
 
 ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

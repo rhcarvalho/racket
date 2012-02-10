@@ -61,19 +61,21 @@ file. This library currently supports only cleartext and md5-hashed
 passwords, and it does not send cleartext passwords unless explicitly
 ordered to (see @racket[postgresql-connect]). These correspond to the
 @tt{md5} and @tt{password} authentication methods in the parlance of
-@tt{pg_hba.conf}, respectively. On Linux, @tt{ident} authentication is
-automatically supported for local sockets, but not TCP sockets. The
-@tt{gss}, @tt{sspi}, @tt{krb5}, @tt{pam}, and @tt{ldap} methods are
-not supported.
+@tt{pg_hba.conf}, respectively. On Linux and Mac OS X, @tt{ident}
+authentication is automatically supported for local sockets (as of
+PostgreSQL 9.1, this authentication method has been renamed
+@tt{peer}). The @tt{gss}, @tt{sspi}, @tt{krb5}, @tt{pam}, and
+@tt{ldap} methods are not supported.
 
 
 @section{MySQL Authentication}
 
 As of version 5.5.7, MySQL supports
 @hyperlink["http://dev.mysql.com/doc/mysql-security-excerpt/5.5/en/pluggable-authentication.html"]{authentication
-plugins}. The only plugin currently supported by this library is
-@tt{mysql_native_password} (the default), which corresponds to the
-password authentication mechanism used since version 4.1.
+plugins}. The only plugins currently supported by this library are
+@tt{mysql_native_password} (the default) and @tt{mysql_old_password},
+which corresponds to the password authentication mechanisms used since
+version 4.1 and before 4.1, respectively.
 
 
 @section[#:tag "sqlite3-requirements"]{SQLite Requirements}
@@ -82,11 +84,8 @@ SQLite support requires the appropriate native library.
 
 @itemlist[
 
-@item{On Windows, the library is @tt{sqlite3.dll}. It can be obtained
-from @hyperlink["http://www.sqlite.org/download.html"]{the SQLite
-download page}; the DLL file should be extracted and placed into one
-of the directories produced by
-@racketblock[(begin (require setup/dirs) (get-lib-search-dirs))]}
+@item{On Windows, the library is @tt{sqlite3.dll}. It is included in
+the Racket distribution.}
 
 @item{On Mac OS X, the library is @tt{libsqlite3.0.dylib}, which is
 included (in @tt{/usr/lib}) in Mac OS X version 10.4 onwards.}

@@ -113,7 +113,7 @@
 
   This mixin calls its @method[window<%> accept-drop-files] with @racket[#t].
 
-  It also calls its @method[frame% set-icon] method according to the current
+  It also calls its @method[top-level-window<%> set-icon] method according to the current
   value of @racket[frame:current-icon].
 
   See also @racket[frame:reorder-menus].
@@ -554,7 +554,7 @@
   width and height of the screen, whichever is smaller.
 
   @defconstructor[((filename string?)
-                   (editor% (is-a?/c editor<%>))
+                   (editor% (implementation?/c editor:basic<%>))
                    (parent (or/c (is-a?/c frame%) false/c) #f)
                    (width (or/c (integer-in 0 10000) false/c) #f)
                    (height (or/c (integer-in 0 10000) false/c) #f)

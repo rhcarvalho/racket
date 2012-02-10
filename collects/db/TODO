@@ -62,10 +62,6 @@ Misc
   - SQL_CURSOR_{COMMIT,ROLLBACK}_BEHAVIOR - check that commit/rollback doesn't delete pstmts!
   - SQL_MAX_{CATALOG,COLUMN,IDENTIFIER,SCHEMA_NAME,TABLE_NAME}_NAME (min 128)
 
-- cursors? (Olin thinks cursors are important. I'm not sure.)
-  - how do people want to use cursors?
-  - how about implicit support only in 'in-query'?
-
 - add evt versions of functions
   - for query functions (?)
   - connection-pool-lease-evt
@@ -78,3 +74,42 @@ Misc
   - sqlite3: sqlite3_last_insert_rowid(), use sqlite3_changes() to see if insert succeeded,
     but still need to tell if stmt was even insert (parse sql?)
   - odbc: ???
+
+- add recursive locking?
+  - cons: - considered by experts to be bad design, sloppy
+  - pros: - would simplify cleanup for one-shot pstmts
+          - would enable simple impl of user-level 'call-with-lock' for grouping 
+            multiple operations together
+            (but this could also be done by two locks: outer "ownership" lock 
+            and inner "invariant-protecting" lock)
+
+- audit code for break-safety, disable breaks as needed
+
+- dialect info for ODBC
+  - can get some tx data from ODBC...
+  - on the other hand, not supposed to do tx-SQL in ODBC anyway, so low-priority
+
+- make implementation notes section of docs
+  - explain cursor impl (& rationale)
+  - explain nested tx impl
+  - ...
+
+- better query path: IMMEDIATE STATEMENTS vs PREPARED STATEMENT CACHE
+  - IMMEDIATE STATEMENTS
+    In pg terms, pipeline Parse and Bind (ie, 1 round-trip instead of 2).
+    Can do immediate query with args using typeids of parameters
+    - problem: results in worse error messages
+    - problem: error invalidates tx (in pg)
+    - problem: same problem exists even with no args: arity errors
+    - benefit: I like the code cleanup.
+  - PREPARED STATEMENT CACHE
+    Add sql=>pstmt cache in collection.
+    - schema can change without warning, invalidate pst type information
+      - mitigation: only cache w/in tx (but is isolation level sufficient?)
+        and clear cache on any tx rollback or potential ddl stmt
+    - problem: (cached) prepare and query not done atomically (two lock entries)
+      so a statement can be invalidated between cache retrieval and execution
+
+- support logging
+
+- audit: make sure no output within atomic section (in drracket, may thread switch)

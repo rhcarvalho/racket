@@ -75,7 +75,8 @@
    (tar-path) 
    (list "-czvf" 
          (path->string (revision-trunk.tgz rev))
-         (path->string trunk-dir))))
+         "-C" (path->string rev-dir)
+         "trunk")))
 
 (define (call-with-temporary-directory thunk)
   (define tempdir (symbol->string (gensym 'tmpdir)))
@@ -89,6 +90,21 @@
      (delete-directory/files tempdir))))
 (define-syntax-rule (with-temporary-directory e)
   (call-with-temporary-directory (lambda () e)))
+
+(define (call-with-temporary-planet-directory thunk)
+  (define tempdir 
+    (build-path (current-directory)
+                (symbol->string (gensym 'planetdir))))
+  (dynamic-wind
+   (lambda ()
+     (make-directory* tempdir))
+   (lambda ()
+     (with-env (["PLTPLANETDIR" (path->string tempdir)])
+               (thunk)))
+   (lambda ()
+     (delete-directory/files tempdir))))
+(define-syntax-rule (with-temporary-planet-directory e)
+  (call-with-temporary-planet-directory (lambda () e)))
 
 (define (call-with-temporary-home-directory thunk)
   (define new-dir 
@@ -260,14 +276,15 @@
                                  (format ":~a" 
                                          (cpu->child
                                           (current-worker)))])
-                             (with-temporary-home-directory
+                               (with-temporary-planet-directory
+                                (with-temporary-home-directory
                                  (with-temporary-directory
-                                     (run/collect/wait/log
-                                      log-pth 
-                                      #:timeout pth-timeout
-                                      #:env (current-env)
-                                      (first l)
-                                      (rest l))))))))
+                                  (run/collect/wait/log
+                                   log-pth 
+                                   #:timeout pth-timeout
+                                   #:env (current-env)
+                                   (first l)
+                                   (rest l)))))))))
                       (λ ()
                         (semaphore-post dir-sema)))))]
                  [else

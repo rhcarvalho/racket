@@ -2,6 +2,7 @@
 @(require "web-server.rkt")
 @(require (for-label web-server/servlet
                      web-server/templates
+                     racket/include
                      racket/promise
                      racket/list
                      xml))
@@ -256,6 +257,84 @@ issue for you called @racket[in]:
 }|
 Notice how it also avoids the absurd amount of punctuation on line two.
 
+@section{Escaping}
+
+@margin-note{Thanks to Michael W. for this section.}
+
+Because templates are useful for many things (scripts, CSS, HTML,
+etc), the Web Server does not assume that the template is for XML-like
+content. Therefore when when templates are expanded, no
+XML escaping is done by default. Beware of @emph{cross-site scripting}
+vulnerabilities! For example, suppose a servlet serves the following
+template where @racket[_some-variable] is an input string supplied by
+the client:
+
+@verbatim[#:indent 2]|{
+ <html>
+  <head><title>Fastest Templates in the West!</title></head>
+  <body>
+   @some-variable
+  </body>
+ </html>
+}|
+
+If the servlet contains something like the following:
+
+@racketblock[
+ (let ([some-variable (get-input-from-user)])
+  (include-template "static.htm"))
+]
+
+There is nothing to prevent an attacker from entering
+@litchar["<script type=\"text/javascript\">...</script>"] to make the
+template expand into:
+
+@verbatim[#:indent 2]|{
+ <html>
+  <head><title>Fastest Templates in the West!</title></head>
+  <body>
+   <script type="text/javascript">...</script>
+  </body>
+ </html>
+}|
+
+Now the server will send the attacker's code to millions of innocent
+users. To keep this from happening when serving HTML, use the
+@racket[xexpr->string] function from the @racketmodname[xml] module.
+
+This can be done in the servlet:
+
+@racketblock[
+ (require xml)
+
+ (let ([some-variable (xexpr->string (get-input-from-user))])
+  (include-template "static.htm"))
+]
+
+Alternatively, make the template responsible for its own escaping:
+
+@verbatim[#:indent 2]|{
+ <html>
+  <head><title>Fastest Templates in the West!</title></head>
+  <body>
+   @(xexpr->string some-variable)
+  </body>
+ </html>
+}|
+
+The improved version renders as:
+
+@verbatim[#:indent 2]|{
+ <html>
+  <head><title>Fastest Templates in the West!</title></head>
+  <body>
+    &lt;script type=\"text/javascript\"&gt;...&lt;/script&gt;
+  </body>
+ </html>
+}|
+
+When writing templates, always remember to escape user-supplied input.
+
 @section{HTTP Responses}
 
 The quickest way to generate an HTTP response from a template is using
@@ -280,8 +359,8 @@ the template to be unescaped, then create a @racket[cdata] structure:
 
 @section{API Details}
 
-@defform[(include-template path)]{
- Compiles the template at @racket[path] using the @at-reader-ref syntax within the enclosing lexical context.
+@defform[(include-template path-spec)]{
+ Compiles the template at @racket[path-spec] using the @at-reader-ref syntax within the enclosing lexical context. The @racket[path-spec] is the same format used by @racket[include].
 
  Example:
  @racketblock[

@@ -588,8 +588,11 @@ plt-extras :+= (package: "lazy")
 ;; -------------------- combinator-parser
 plt-extras :+= (collects: "combinator-parser")
 
-;; -------------------- icons
-dr-extras :+= (collects: "icons/")
+;; -------------------- icons, images
+dr-extras :+= (collects: "icons/*.{jpg|png|gif|bmp|xbm|xpm}")
+dr-extras :+= (package: "images/")
+
+plt-extras :+= (package: "icons/")
 
 ;; -------------------- string
 dr-extras :+= (package: "string-constants")
@@ -625,7 +628,7 @@ plt-extras :+= (- (+ (package: "games/" #:executable "plt-games")
                   "paint-by-numbers/{hattori|solution-sets|raw-problems}")
 
 ;; -------------------- texpict & slideshow
-plt-extras :+= (collects: "texpict/")
+plt-extras :+= (collects: "texpict/") 
                (package: "slideshow")
 
 ;; -------------------- frtime
@@ -649,8 +652,6 @@ mz-extras :+= (- (package: "swindle")
 
 ;; -------------------- plot
 plt-extras :+= (package: "plot")
-               (src: "fit")
-               (lib: "libfit*")
 
 ;; -------------------- mzcom
 plt-extras :+= (- (package: "mzcom" #:src? #t)
@@ -686,8 +687,7 @@ mz-extras :+= (- (package: "unstable")
 plt-extras :+= (package: "plai/")
 
 ;; -------------------- rackunit & older schemeunit compatibility
-plt-extras :+= (package: "rackunit/")
-plt-extras :+= (package: "schemeunit/")
+plt-extras :+= (package: "rackunit/") (package: "schemeunit/")
 
 ;; -------------------- racklog (aka schelog)
 plt-extras :+= (package: "racklog/")
@@ -696,7 +696,7 @@ plt-extras :+= (package: "racklog/")
 plt-extras :+= (package: "datalog/")
 
 ;; -------------------- db
-plt-extras :+= (package: "db/")
+plt-extras :+= (package: "db/") (lib: "sqlite*")
 
 ;; ============================================================================
 ;; Readme header

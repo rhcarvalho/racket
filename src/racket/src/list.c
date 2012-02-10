@@ -1,6 +1,6 @@
 /*
   Racket
-  Copyright (c) 2004-2011 PLT Scheme Inc.
+  Copyright (c) 2004-2012 PLT Scheme Inc.
   Copyright (c) 1995-2001 Matthew Flatt
 
     This library is free software; you can redistribute it and/or
@@ -177,17 +177,20 @@ scheme_init_list (Scheme_Env *env)
   scheme_add_global_constant ("null", scheme_null, env);
 
   p = scheme_make_folding_prim(pair_p_prim, "pair?", 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant ("pair?", p, env);
 
   p = scheme_make_folding_prim(mpair_p_prim, "mpair?", 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant ("mpair?", p, env);
 
   REGISTER_SO(scheme_cons_proc);
   p = scheme_make_immed_prim(cons_prim, "cons", 2, 2);
   scheme_cons_proc = p;
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_BINARY_INLINED;
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_BINARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant ("cons", p, env);
 
   p = scheme_make_folding_prim(scheme_checked_car, "car", 1, 1, 1);
@@ -201,7 +204,8 @@ scheme_init_list (Scheme_Env *env)
   REGISTER_SO(scheme_mcons_proc);
   p = scheme_make_immed_prim(mcons_prim, "mcons", 2, 2);
   scheme_mcons_proc = p;
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_BINARY_INLINED;
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_BINARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant ("mcons", p, env);
 
   p = scheme_make_immed_prim(scheme_checked_mcar, "mcar", 1, 1);
@@ -221,11 +225,13 @@ scheme_init_list (Scheme_Env *env)
   scheme_add_global_constant ("set-mcdr!", p, env);
 
   p = scheme_make_folding_prim(null_p_prim, "null?", 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant ("null?", p, env);
 
   p = scheme_make_folding_prim(list_p_prim, "list?", 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant ("list?", p, env);
 
   REGISTER_SO(scheme_list_proc);
@@ -233,7 +239,8 @@ scheme_init_list (Scheme_Env *env)
   scheme_list_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
                                 | SCHEME_PRIM_IS_BINARY_INLINED
-                                | SCHEME_PRIM_IS_NARY_INLINED);
+                                | SCHEME_PRIM_IS_NARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant ("list", p, env);
 
   REGISTER_SO(scheme_list_star_proc);
@@ -241,7 +248,8 @@ scheme_init_list (Scheme_Env *env)
   scheme_list_star_proc = p;
   SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
                                 | SCHEME_PRIM_IS_BINARY_INLINED
-                                | SCHEME_PRIM_IS_NARY_INLINED);
+                                | SCHEME_PRIM_IS_NARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant ("list*", p, env);
 
   scheme_add_global_constant("immutable?",
@@ -419,17 +427,17 @@ scheme_init_list (Scheme_Env *env)
   REGISTER_SO(scheme_box_proc);
   p = scheme_make_immed_prim(box, BOX, 1, 1);
   scheme_box_proc = p;
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;  
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant(BOX, p, env);
 
-  scheme_add_global_constant("box-immutable",
-			     scheme_make_immed_prim(immutable_box,
-						    "box-immutable",
-						    1, 1),
-			     env);
+  p = scheme_make_immed_prim(immutable_box, "box-immutable", 1, 1);
+  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_OMITABLE;
+  scheme_add_global_constant("box-immutable", p, env);
   
   p = scheme_make_folding_prim(box_p, BOXP, 1, 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;  
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant(BOXP, p, env);
 
   p = scheme_make_noncm_prim(unbox, UNBOX, 1, 1);
@@ -746,11 +754,15 @@ scheme_init_unsafe_list (Scheme_Env *env)
   scheme_add_global_constant ("unsafe-list-tail", p, env);
 
   p = scheme_make_immed_prim(unsafe_mcar, "unsafe-mcar", 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_UNSAFE_OMITABLE
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant ("unsafe-mcar", p, env);
 
   p = scheme_make_immed_prim(unsafe_mcdr, "unsafe-mcdr", 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_UNSAFE_OMITABLE
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant ("unsafe-mcdr", p, env);
 
   p = scheme_make_immed_prim(unsafe_set_mcar, "unsafe-set-mcar!", 2, 2);
@@ -762,11 +774,15 @@ scheme_init_unsafe_list (Scheme_Env *env)
   scheme_add_global_constant ("unsafe-set-mcdr!", p, env);
   
   p = scheme_make_immed_prim(unsafe_unbox, "unsafe-unbox", 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_UNSAFE_OMITABLE
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant("unsafe-unbox", p, env);
 
   p = scheme_make_immed_prim(unsafe_unbox_star, "unsafe-unbox*", 1, 1);
-  SCHEME_PRIM_PROC_FLAGS(p) |= SCHEME_PRIM_IS_UNARY_INLINED;  
+  SCHEME_PRIM_PROC_FLAGS(p) |= (SCHEME_PRIM_IS_UNARY_INLINED
+                                | SCHEME_PRIM_IS_UNSAFE_OMITABLE
+                                | SCHEME_PRIM_IS_OMITABLE);
   scheme_add_global_constant("unsafe-unbox*", p, env);
 
   p = scheme_make_immed_prim(unsafe_set_box, "unsafe-set-box!", 2, 2);
@@ -1745,6 +1761,18 @@ Scheme_Bucket_Table *scheme_make_weak_equal_table(void)
   return t;
 }
 
+Scheme_Bucket_Table *scheme_make_nonlock_equal_bucket_table(void)
+{
+  Scheme_Bucket_Table *t;
+  
+  t = scheme_make_bucket_table(20, SCHEME_hash_ptr);
+  
+  t->compare = compare_equal;
+  t->make_hash_indices = make_hash_indices_for_equal;
+
+  return t;
+}
+
 Scheme_Bucket_Table *scheme_make_weak_eqv_table(void)
 {
   Scheme_Object *sema;
@@ -2030,7 +2058,7 @@ static Scheme_Object *hash_table_copy(int argc, Scheme_Object *argv[])
     for (i = t->count; i--; ) {
       scheme_hash_tree_index(t, i, &k, &val);
       if (!SAME_OBJ((Scheme_Object *)t, v))
-        val = scheme_chaperone_hash_traversal_get(v, k);
+        val = scheme_chaperone_hash_traversal_get(v, k, &k);
       if (val)
         scheme_hash_set(naya, k, val);
     }
@@ -2996,9 +3024,11 @@ static Scheme_Object *chaperone_hash_key(const char *name, Scheme_Object *table,
   return chaperone_hash_op(name, table, key, NULL, 3);
 }
 
-Scheme_Object *scheme_chaperone_hash_traversal_get(Scheme_Object *table, Scheme_Object *key)
+Scheme_Object *scheme_chaperone_hash_traversal_get(Scheme_Object *table, Scheme_Object *key,
+                                                   Scheme_Object **alt_key)
 {
   key = chaperone_hash_key("hash-table-iterate-key", table, key);
+  *alt_key = key;
   return chaperone_hash_op("hash-ref", table, key, NULL, 0);
 }
 
